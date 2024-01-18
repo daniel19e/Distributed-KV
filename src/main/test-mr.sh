@@ -97,7 +97,6 @@ sleep 1
 
 # wait for the coordinator to exit.
 wait $pid
-
 # since workers are required to exit when a job is completely finished,
 # and not before, that means the job has finished.
 sort mr-out* | grep . > mr-wc-all

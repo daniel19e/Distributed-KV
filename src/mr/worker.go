@@ -37,7 +37,7 @@ func ihash(key string) int {
 }
 
 func writeKeyValueToFile(filename string, kva []KeyValue) error {
-	file, err := os.Create(filename)
+	file, err := os.CreateTemp("", "temp")
 	if err != nil {
 		return err
 	}
@@ -49,6 +49,7 @@ func writeKeyValueToFile(filename string, kva []KeyValue) error {
 			return err
 		}
 	}
+	os.Rename(file.Name(), filename)
 	return nil
 }
 func readJSON(file string) {
@@ -62,7 +63,7 @@ func readJSON(file string) {
 	//}
 }
 func handleMapPhase(filename string, nReduce int, mapTaskIdx int, mapf func(string, string) []KeyValue) {
-	fmt.Printf("filename %v\n", filename)
+	//fmt.Printf("filename %v\n", filename)
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Fatalf("Error: opening file %v", file)
@@ -88,7 +89,7 @@ func handleMapPhase(filename string, nReduce int, mapTaskIdx int, mapf func(stri
 	for reduceTaskIdx, bucket := range buckets {
 		if len(bucket) > 0 {
 			intermediateFile := fmt.Sprintf("mr-%d-%d", mapTaskIdx, reduceTaskIdx)
-			fmt.Printf("Intermediate file: %v\n", intermediateFile)
+			//	fmt.Printf("Intermediate file: %v\n", intermediateFile)
 			err := writeKeyValueToFile(intermediateFile, bucket)
 			if err != nil {
 				log.Fatalf("Failed to write to intermediate file: %v", err)
@@ -96,8 +97,7 @@ func handleMapPhase(filename string, nReduce int, mapTaskIdx int, mapf func(stri
 		}
 	}
 	MapTaskIsFinished(filename)
-	fmt.Printf("map completed\n")
-	time.Sleep(1 * time.Second)
+	//fmt.Printf("map completed\n")
 }
 
 func readIntermediateFile(filename string) ([]KeyValue, error) {
@@ -123,7 +123,7 @@ func readIntermediateFile(filename string) ([]KeyValue, error) {
 
 func handleReducePhase(reducef func(string, []string) string, reduceTaskIdx int, numFiles int) {
 	oname := fmt.Sprintf("mr-out-%v", reduceTaskIdx)
-	outputFile, err := os.Create(oname)
+	outputFile, err := os.CreateTemp("", "temp")
 	if err != nil {
 		log.Fatalf("Failed to create output file: %v", err)
 	}
@@ -157,6 +157,7 @@ func handleReducePhase(reducef func(string, []string) string, reduceTaskIdx int,
 
 		i = j
 	}
+	os.Rename(outputFile.Name(), oname)
 	ReduceTaskIsFinished(reduceTaskIdx)
 }
 
@@ -165,7 +166,7 @@ func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 	for {
 		phase, filename, mapTaskIdx, reduceTaskIdx, nReduce, err := CallRequestTask()
-		fmt.Printf("%v %v %v %v\n", filename, phase, mapTaskIdx, nReduce)
+		//	fmt.Printf("worker is still alive %v %v %v %v\n", filename, phase, mapTaskIdx, reduceTaskIdx)
 		if err != nil {
 			fmt.Printf("No file to open\n")
 			break
@@ -175,12 +176,13 @@ func Worker(mapf func(string, string) []KeyValue,
 		} else if phase == "reduce" {
 			handleReducePhase(reducef, reduceTaskIdx, 8)
 		}
+		time.Sleep(1 * time.Second)
 	}
 }
 
 // RPC to notify coordinator a map task was finished
 func MapTaskIsFinished(key string) {
-	fmt.Printf("task is finished rpc\n")
+	//	fmt.Printf("task is finished rpc\n")
 	args := TaskIsFinishedArgs{}
 	args.Filename = key
 	args.TaskPhase = "map"
@@ -195,7 +197,7 @@ func MapTaskIsFinished(key string) {
 
 // RPC to notify coordinator a reduce task is finished
 func ReduceTaskIsFinished(reduceIdx int) {
-	fmt.Printf("task is finished rpc\n")
+	//	fmt.Printf("task is finished rpc\n")
 	args := TaskIsFinishedArgs{}
 	args.TaskPhase = "reduce"
 	args.ReduceTask = reduceIdx
@@ -215,11 +217,11 @@ func CallRequestTask() (string, string, int, int, int, error) {
 
 	ok := call("Coordinator.RequestTask", &args, &reply)
 	if ok {
-		fmt.Printf("task requested\n")
+		//	fmt.Printf("task requested\n")
 		return reply.TaskPhase, reply.InputFile, reply.MapTaskIdx, reply.ReduceTaskIdx, reply.NReduce, nil
 	} else {
 		errorMsg := "request task call failed!\n"
-		fmt.Printf(errorMsg)
+		//fmt.Printf(errorMsg)
 		return "", "", -1, -1, -1, errors.New(errorMsg)
 	}
 }

@@ -1,13 +1,20 @@
 package mr
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/rpc"
 	"os"
 	"sync"
+)
+
+type TaskState int
+
+const (
+	notAssigned TaskState = iota
+	assigned
+	completed
 )
 
 type Coordinator struct {
@@ -34,7 +41,7 @@ func (c *Coordinator) IsMapPhaseDone() bool {
 func (c *Coordinator) isReducePhaseDone() bool {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	for i := 0; i < c.nReduce*len(c.files); i++ {
+	for i := 0; i < c.nReduce; i++ {
 		if !c.reducePhaseStatus[i] {
 			return false
 		}
@@ -89,19 +96,19 @@ func (c *Coordinator) TaskIsFinished(args *TaskIsFinishedArgs, reply *TaskIsFini
 
 // rpc for workers to request a task
 func (c *Coordinator) RequestTask(args *RequestTaskArgs, reply *RequestTaskReply) error {
-	fmt.Printf("worker requested a task\n")
+	//fmt.Printf("worker requested a task\n")
 	if c.phase == "map" {
-		fmt.Printf("assigning map task\n")
+		//fmt.Printf("assigning map task\n")
 		c.assignNextMapTask(reply)
 		reply.TaskPhase = "map"
 	} else if c.phase == "reduce" {
 		// start assigning reduce tasks to workers
-		fmt.Printf("reduce phase starting\n")
+		//fmt.Printf("reduce phase starting\n")
 		c.assignNextReduceTask(reply)
 		reply.TaskPhase = "reduce"
 	}
 	reply.NReduce = c.nReduce
-	fmt.Printf("request task rpc end\n")
+	//fmt.Printf("request task rpc end\n")
 	return nil
 }
 
@@ -122,11 +129,13 @@ func (c *Coordinator) server() {
 // main/mrcoordinator.go calls Done() periodically to find out
 // if the entire job has finished.
 func (c *Coordinator) Done() bool {
+	//fmt.Printf("calling done\n")
 	ret := false
 	if c.IsMapPhaseDone() {
 		c.phase = "reduce"
 	}
 	if c.isReducePhaseDone() {
+		//fmt.Printf("all reduce jobs are done %v\n", c.reducePhaseStatus)
 		ret = true
 	}
 	return ret
