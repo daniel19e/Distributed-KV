@@ -2,7 +2,6 @@ package mr
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -52,18 +51,9 @@ func writeKeyValueToFile(filename string, kva []KeyValue) error {
 	os.Rename(file.Name(), filename)
 	return nil
 }
-func readJSON(file string) {
-	//dec := json.NewDecoder(file)
-	//for {
-	//  var kv KeyValue
-	//  if err := dec.Decode(&kv); err != nil {
-	//	break
-	//  }
-	//  kva = append(kva, kv)
-	//}
-}
+
 func handleMapPhase(filename string, nReduce int, mapTaskIdx int, mapf func(string, string) []KeyValue) {
-	//fmt.Printf("filename %v\n", filename)
+	//	fmt.Printf("filename %v\n", filename)
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Fatalf("Error: opening file %v", file)
@@ -133,7 +123,7 @@ func handleReducePhase(reducef func(string, []string) string, reduceTaskIdx int,
 		filename := fmt.Sprintf("mr-%d-%d", i, reduceTaskIdx)
 		kvPairs, err := readIntermediateFile(filename)
 		if err != nil {
-			log.Printf("Failed to read intermediate file %s: %v", filename, err)
+			//log.Printf("Failed to read intermediate file %s: %v", filename, err)
 			continue
 		}
 		intermediate = append(intermediate, kvPairs...)
@@ -165,16 +155,17 @@ func handleReducePhase(reducef func(string, []string) string, reduceTaskIdx int,
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 	for {
-		phase, filename, mapTaskIdx, reduceTaskIdx, nReduce, err := CallRequestTask()
-		//	fmt.Printf("worker is still alive %v %v %v %v\n", filename, phase, mapTaskIdx, reduceTaskIdx)
-		if err != nil {
-			fmt.Printf("No file to open\n")
-			break
+		reply := CallRequestTask()
+		//	fmt.Printf("worker is still alive %v %v %v\n", reply.InputFile, reply.MapTaskIdx, reply.ReduceTaskIdx)
+
+		if reply.MapTaskIdx >= 0 {
+			handleMapPhase(reply.InputFile, reply.NReduce, reply.MapTaskIdx, mapf)
+		} else if reply.ReduceTaskIdx >= 0 {
+			handleReducePhase(reducef, reply.ReduceTaskIdx, reply.NumFiles)
 		}
-		if phase == "map" {
-			handleMapPhase(filename, nReduce, mapTaskIdx, mapf)
-		} else if phase == "reduce" {
-			handleReducePhase(reducef, reduceTaskIdx, 8)
+		if reply.Done {
+			fmt.Printf("worker exiting\n")
+			break
 		}
 		time.Sleep(1 * time.Second)
 	}
@@ -211,19 +202,11 @@ func ReduceTaskIsFinished(reduceIdx int) {
 }
 
 // request task RPC
-func CallRequestTask() (string, string, int, int, int, error) {
+func CallRequestTask() RequestTaskReply {
 	args := RequestTaskArgs{}
 	reply := RequestTaskReply{}
-
-	ok := call("Coordinator.RequestTask", &args, &reply)
-	if ok {
-		//	fmt.Printf("task requested\n")
-		return reply.TaskPhase, reply.InputFile, reply.MapTaskIdx, reply.ReduceTaskIdx, reply.NReduce, nil
-	} else {
-		errorMsg := "request task call failed!\n"
-		//fmt.Printf(errorMsg)
-		return "", "", -1, -1, -1, errors.New(errorMsg)
-	}
+	call("Coordinator.RequestTask", &args, &reply)
+	return reply
 }
 
 // send an RPC request to the coordinator, wait for the response.

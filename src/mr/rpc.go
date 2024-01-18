@@ -20,6 +20,8 @@ type RequestTaskReply struct {
 	ReduceTaskIdx int
 	MapTaskIdx    int
 	NReduce       int
+	NumFiles      int
+	Done          bool
 }
 
 type TaskIsFinishedArgs struct {
