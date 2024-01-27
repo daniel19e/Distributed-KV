@@ -167,7 +167,7 @@ type AppendEntriesReply struct {
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) error {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-
+	BetterDebug(dInfo, "AppendEntries RPC being called in term %v\n", rf.currentTerm)
 	reply.Term = rf.currentTerm
 	rf.lastHeartbeatTime = time.Now()
 	if args.Term < rf.currentTerm {
@@ -211,10 +211,13 @@ type RequestVoteReply struct {
 }
 
 func (rf *Raft) changeRoleTo(role Role) {
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
+	BetterDebug(dInfo, "Server %v trying to switch role %v to role %v\n", rf.me, rf.role, role)
 	if rf.role != role {
+		BetterDebug(dInfo, "Server %v switched roles\n", rf.me)
 		rf.role = role
+	}
+	if role == Follower {
+		rf.votedFor = -1
 	}
 }
 
@@ -223,7 +226,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-
+	BetterDebug(dVote, "Server %v got a vote request at term %v\n", rf.me, rf.currentTerm)
 	reply.Term = rf.currentTerm
 
 	// reply false if term < currentTerm
@@ -326,7 +329,7 @@ func (rf *Raft) killed() bool {
 }
 
 func (rf *Raft) sendHeartbeat() {
-	BetterDebug(dInfo, "sending heartbeat as leader %v\n", rf.me)
+	BetterDebug(dInfo, "Sending heartbeat as leader %v at term %v\n", rf.me, rf.currentTerm)
 
 	// prepare AppendEntriesArgs with empty Entries for heartbeat
 	args := AppendEntriesArgs{
@@ -334,12 +337,15 @@ func (rf *Raft) sendHeartbeat() {
 		LeaderId: rf.me,
 	}
 
-	for i := range rf.peers {
-		if i != rf.me {
+	for server := range rf.peers {
+		if server != rf.me {
 			go func(server int) { // send rpcs in parallel
 				reply := AppendEntriesReply{}
-				rf.sendAppendEntries(server, &args, &reply)
-			}(i)
+				ok := rf.sendAppendEntries(server, &args, &reply)
+				if !ok {
+					BetterDebug(dError, "AppendEntries RPC failed to send from server %v to peer %v\n", rf.me, server)
+				}
+			}(server)
 		}
 	}
 }
@@ -366,7 +372,42 @@ func (rf *Raft) checkAndUpdateTerm(termToCheck int) bool {
 func (rf *Raft) resetElectionTimer() {
 	rf.lastHeartbeatTime = time.Now()
 }
+
 func (rf *Raft) startElection() {
+	// 1. increment currentTerm
+	// 2. vote for self
+	// 3. reset election timer
+	// 4. send RequestVote RPCs to all other servers
+	rf.changeRoleTo(Candidate)
+	rf.currentTerm++
+	BetterDebug(dTerm, "Server %v has started a new term %v\n", rf.me, rf.currentTerm)
+	rf.votedFor = rf.me
+
+	for server := range rf.peers {
+		// skip current server
+		if server != rf.me {
+			BetterDebug(dVote, "Server %v is sending RequestVote to peer %v\n", rf.me, server)
+			go func(s int) {
+				rf.mu.Lock()
+				args := RequestVoteArgs{
+					Term:         rf.currentTerm,
+					CandidateId:  rf.me,
+					LastLogIndex: 0,
+					LastLogTerm:  0,
+				}
+				reply := RequestVoteReply{}
+				self := rf.me
+				rf.mu.Unlock()
+
+				ok := rf.sendRequestVote(s, &args, &reply)
+				if !ok {
+					BetterDebug(dError, "RequestVote RPC failed to send from server %v to peer %v\n", self, s)
+				} else {
+					BetterDebug(dInfo, "RequestVote RPC successfully sent from server %v to peer %v\n", self, s)
+				}
+			}(server)
+		}
+	}
 
 }
 
@@ -380,24 +421,25 @@ func (rf *Raft) ticker() {
 		heartbeatDuration := rf.heartbeatTime
 		role := rf.role
 		self := rf.me
+		curTerm := rf.currentTerm
 		rf.mu.Unlock()
 
 		switch role {
 		case Leader:
 			if elapsed > heartbeatDuration {
-				BetterDebug(dLeader, "Leader %v sending heartbeat\n", self)
+				BetterDebug(dLeader, "Server %v (leader) sending heartbeat at term %v\n", self, curTerm)
 				go rf.sendHeartbeat()
 			}
 		case Candidate:
 			if elapsed > electionTimeout {
-				BetterDebug(dCandidate, "Candidate %v starting election\n", self)
+				BetterDebug(dCandidate, "Server %v (candidate) starting election at term %v\n", self, curTerm)
 				go rf.startElection()
 			}
 		case Follower:
 			// If election timeout elapses without receiving AppendEntries RPC
 			// from current leader or granting vote to candidate: convert to candidate
 			if elapsed > electionTimeout {
-				BetterDebug(dInfo, "Follower %v turning into candidate and starting election\n", self)
+				BetterDebug(dInfo, "Server %v (follower) turning into candidate and starting election\n", self, curTerm)
 				rf.changeRoleTo(Candidate)
 				go rf.startElection()
 			}
@@ -438,6 +480,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.nextIndex = make([]int, 0) // init to leader last log index + 1
 	rf.matchIndex = make([]int, 0)
 	// initialize from state persisted before a crash
+	BetterDebug(dInfo, "Initializing server %v...\n", me)
 	rf.readPersist(persister.ReadRaftState())
 
 	// start ticker goroutine to start elections
