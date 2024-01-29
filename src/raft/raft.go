@@ -433,10 +433,10 @@ func (rf *Raft) startElection() {
 	// 4. send RequestVote RPCs to all other servers
 	rf.changeRoleTo(Candidate)
 	rf.currentTerm++
-	BetterDebug(dTerm, "Server %v has started a new term %v\n", rf.me, rf.currentTerm)
+	BetterDebug(dTerm, "Server %v has started a new term. Election has started. %v\n", rf.me, rf.currentTerm)
 	rf.votedFor = rf.me
 	rf.electionTimeoutDuration = randomizedElectionTimeout()
-
+	numVotes := 1 // start with one because server voted for itself
 	for server := range rf.peers {
 		// skip current server
 		if server != rf.me {
@@ -452,7 +452,6 @@ func (rf *Raft) startElection() {
 				self := rf.me
 				rf.mu.Unlock()
 				once := sync.Once{}
-				numVotes := 1 // start with one because server voted for itself
 				rf.handleCandidateRequestingVote(args, s, self, &numVotes, &once)
 			}(server)
 		}
