@@ -16,6 +16,12 @@ func (entries Entries) getEntryAt(idx int) LogEntry {
 	}
 	return entries[idx-1]
 }
+func (entries Entries) getLastIndex() int {
+	return len(entries)
+}
+func (entries Entries) peak() LogEntry {
+	return entries.getEntryAt(len(entries))
+}
 
 func (entries Entries) slice(start int, end int) Entries {
 	if start > end {
