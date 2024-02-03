@@ -1,0 +1,309 @@
+000005 INFO Initializing server 0...
+000008 INFO Initializing server 1...
+000009 INFO Initializing server 2...
+Test (2B): basic agreement ...
+004322 INFO Server 2 (follower) turning into candidate and starting election
+%!(EXTRA int=0)
+004324 INFO Server 2 trying to switch role 0 to role 1
+004324 INFO Server 2 switched roles
+004324 INFO Server 2 trying to switch role 1 to role 1
+004325 TERM Server 2 has started a new term. Election has started. 1
+004325 VOTE Server 2 is sending RequestVote to peer 0
+004325 VOTE Server 2 is sending RequestVote to peer 1
+004329 VOTE Server 1 got a vote request at term 0
+004329 INFO RPC request or response contains term T > currentTerm. T = 1, currentTerm = 0
+004329 INFO Server 1 trying to switch role 0 to role 0
+004330 VOTE Server 1 log is up to date. Vote granted
+004329 VOTE Server 0 got a vote request at term 0
+004331 INFO RPC request or response contains term T > currentTerm. T = 1, currentTerm = 0
+004331 INFO Server 0 trying to switch role 0 to role 0
+004331 VOTE Server 0 log is up to date. Vote granted
+004331 INFO RequestVote RPC successfully sent from server 2 to peer 1
+004331 VOTE Server 2 got a vote by server 1 on term 1
+004331 LEAD Server 2 received the majority votes. It is now leader.
+004332 INFO Sending heartbeat as leader 2 at term 1
+004332 INFO RequestVote RPC successfully sent from server 2 to peer 0
+004333 VOTE Server 2 got a vote by server 0 on term 1
+004333 LEAD Server 2 received the majority votes. It is now leader.
+004334 INFO Sending heartbeat as leader 2 at term 1
+004333 INFO AppendEntries RPC being called in term 1
+004334 CMIT Server 1 has updated commitIndex to 0 at term 1.
+004334 INFO AppendEntries RPC being called in term 1
+004335 CMIT Server 0 has updated commitIndex to 0 at term 1.
+004335 INFO AppendEntries RPC being called in term 1
+004335 INFO AppendEntries RPC being called in term 1
+004594 LEAD Server 2 is sending entries to peers. Log looks like [{0 <nil>} {1 100}]
+004595 LOG1 Server 2 added command 100 (index 2) to the log in term 1
+004597 INFO AppendEntries RPC being called in term 1
+004598 ERRO Trying to get log entry with invalid index.
+004598 LOG1 Server 2 gets Server 1 Log entries at term 1
+004599 INFO AppendEntries RPC being called in term 1
+004599 ERRO Trying to get log entry with invalid index.
+004600 LOG1 Server 2 gets Server 0 Log entries at term 1
+004626 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 461.760625ms, heartbeat duration is 100ms.
+004627 LOG1 Server 1 is applying log at term 1, last applied is -1, commitIndex is 0
+004628 INFO Sending heartbeat as leader 2 at term 1
+004627 LOG1 Server 0 is applying log at term 1, last applied is -1, commitIndex is 0
+004631 INFO AppendEntries RPC being called in term 1
+004632 INFO AppendEntries RPC being called in term 1
+004936 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 492.720667ms, heartbeat duration is 100ms.
+004937 INFO Sending heartbeat as leader 2 at term 1
+004938 INFO AppendEntries RPC being called in term 1
+004938 INFO AppendEntries RPC being called in term 1
+005238 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 522.894ms, heartbeat duration is 100ms.
+005238 INFO Sending heartbeat as leader 2 at term 1
+005240 INFO AppendEntries RPC being called in term 1
+005240 INFO AppendEntries RPC being called in term 1
+005548 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 553.922834ms, heartbeat duration is 100ms.
+005549 INFO Sending heartbeat as leader 2 at term 1
+005551 INFO AppendEntries RPC being called in term 1
+005551 INFO AppendEntries RPC being called in term 1
+005850 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 584.092667ms, heartbeat duration is 100ms.
+005850 INFO Sending heartbeat as leader 2 at term 1
+005852 INFO AppendEntries RPC being called in term 1
+005852 INFO AppendEntries RPC being called in term 1
+006160 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 615.123209ms, heartbeat duration is 100ms.
+006162 INFO Sending heartbeat as leader 2 at term 1
+006166 INFO AppendEntries RPC being called in term 1
+006166 INFO AppendEntries RPC being called in term 1
+006462 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 645.335334ms, heartbeat duration is 100ms.
+006464 INFO Sending heartbeat as leader 2 at term 1
+006467 INFO AppendEntries RPC being called in term 1
+006467 INFO AppendEntries RPC being called in term 1
+006771 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 676.25225ms, heartbeat duration is 100ms.
+006772 INFO Sending heartbeat as leader 2 at term 1
+006776 INFO AppendEntries RPC being called in term 1
+006776 INFO AppendEntries RPC being called in term 1
+007074 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 706.497959ms, heartbeat duration is 100ms.
+007075 INFO Sending heartbeat as leader 2 at term 1
+007077 INFO AppendEntries RPC being called in term 1
+007077 INFO AppendEntries RPC being called in term 1
+007384 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 737.5715ms, heartbeat duration is 100ms.
+007385 INFO Sending heartbeat as leader 2 at term 1
+007387 INFO AppendEntries RPC being called in term 1
+007388 INFO AppendEntries RPC being called in term 1
+007695 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 768.589375ms, heartbeat duration is 100ms.
+007695 INFO Sending heartbeat as leader 2 at term 1
+007697 INFO AppendEntries RPC being called in term 1
+007697 INFO AppendEntries RPC being called in term 1
+008005 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 799.671792ms, heartbeat duration is 100ms.
+008007 INFO Sending heartbeat as leader 2 at term 1
+008014 INFO AppendEntries RPC being called in term 1
+008014 INFO AppendEntries RPC being called in term 1
+008316 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 830.743834ms, heartbeat duration is 100ms.
+008317 INFO Sending heartbeat as leader 2 at term 1
+008318 INFO AppendEntries RPC being called in term 1
+008319 INFO AppendEntries RPC being called in term 1
+008630 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 862.157334ms, heartbeat duration is 100ms.
+008631 INFO Sending heartbeat as leader 2 at term 1
+008632 INFO AppendEntries RPC being called in term 1
+008632 INFO AppendEntries RPC being called in term 1
+008978 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 896.966125ms, heartbeat duration is 100ms.
+008979 INFO Sending heartbeat as leader 2 at term 1
+008982 INFO AppendEntries RPC being called in term 1
+008982 INFO AppendEntries RPC being called in term 1
+009280 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 927.093709ms, heartbeat duration is 100ms.
+009280 INFO Sending heartbeat as leader 2 at term 1
+009284 INFO AppendEntries RPC being called in term 1
+009284 INFO AppendEntries RPC being called in term 1
+009581 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 957.19525ms, heartbeat duration is 100ms.
+009581 INFO Sending heartbeat as leader 2 at term 1
+009583 INFO AppendEntries RPC being called in term 1
+009583 INFO AppendEntries RPC being called in term 1
+009890 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 988.109334ms, heartbeat duration is 100ms.
+009890 INFO Sending heartbeat as leader 2 at term 1
+009892 INFO AppendEntries RPC being called in term 1
+009892 INFO AppendEntries RPC being called in term 1
+010200 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.019145542s, heartbeat duration is 100ms.
+010201 INFO Sending heartbeat as leader 2 at term 1
+010202 INFO AppendEntries RPC being called in term 1
+010202 INFO AppendEntries RPC being called in term 1
+010511 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.05019s, heartbeat duration is 100ms.
+010511 INFO Sending heartbeat as leader 2 at term 1
+010513 INFO AppendEntries RPC being called in term 1
+010513 INFO AppendEntries RPC being called in term 1
+010812 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.080301542s, heartbeat duration is 100ms.
+010812 INFO Sending heartbeat as leader 2 at term 1
+010814 INFO AppendEntries RPC being called in term 1
+010814 INFO AppendEntries RPC being called in term 1
+011122 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.111332125s, heartbeat duration is 100ms.
+011123 INFO Sending heartbeat as leader 2 at term 1
+011124 INFO AppendEntries RPC being called in term 1
+011124 INFO AppendEntries RPC being called in term 1
+011433 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.142394417s, heartbeat duration is 100ms.
+011433 INFO Sending heartbeat as leader 2 at term 1
+011434 INFO AppendEntries RPC being called in term 1
+011434 INFO AppendEntries RPC being called in term 1
+011743 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.173405834s, heartbeat duration is 100ms.
+011743 INFO Sending heartbeat as leader 2 at term 1
+011745 INFO AppendEntries RPC being called in term 1
+011745 INFO AppendEntries RPC being called in term 1
+012050 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.204094459s, heartbeat duration is 100ms.
+012051 INFO Sending heartbeat as leader 2 at term 1
+012052 INFO AppendEntries RPC being called in term 1
+012052 INFO AppendEntries RPC being called in term 1
+012360 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.235111125s, heartbeat duration is 100ms.
+012360 INFO Sending heartbeat as leader 2 at term 1
+012362 INFO AppendEntries RPC being called in term 1
+012362 INFO AppendEntries RPC being called in term 1
+012670 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.266145042s, heartbeat duration is 100ms.
+012671 INFO Sending heartbeat as leader 2 at term 1
+012672 INFO AppendEntries RPC being called in term 1
+012672 INFO AppendEntries RPC being called in term 1
+012981 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.29719525s, heartbeat duration is 100ms.
+012981 INFO Sending heartbeat as leader 2 at term 1
+012983 INFO AppendEntries RPC being called in term 1
+012983 INFO AppendEntries RPC being called in term 1
+013282 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.327345375s, heartbeat duration is 100ms.
+013283 INFO Sending heartbeat as leader 2 at term 1
+013284 INFO AppendEntries RPC being called in term 1
+013284 INFO AppendEntries RPC being called in term 1
+013592 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.35834775s, heartbeat duration is 100ms.
+013593 INFO Sending heartbeat as leader 2 at term 1
+013594 INFO AppendEntries RPC being called in term 1
+013594 INFO AppendEntries RPC being called in term 1
+013903 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.389406792s, heartbeat duration is 100ms.
+013904 INFO Sending heartbeat as leader 2 at term 1
+013906 INFO AppendEntries RPC being called in term 1
+013906 INFO AppendEntries RPC being called in term 1
+014213 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.420445584s, heartbeat duration is 100ms.
+014214 INFO Sending heartbeat as leader 2 at term 1
+014216 INFO AppendEntries RPC being called in term 1
+014216 INFO AppendEntries RPC being called in term 1
+014519 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.4510385s, heartbeat duration is 100ms.
+014520 INFO Sending heartbeat as leader 2 at term 1
+014521 INFO AppendEntries RPC being called in term 1
+014521 INFO AppendEntries RPC being called in term 1
+014830 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.482103334s, heartbeat duration is 100ms.
+014831 INFO Sending heartbeat as leader 2 at term 1
+014833 INFO AppendEntries RPC being called in term 1
+014833 INFO AppendEntries RPC being called in term 1
+015140 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.513141459s, heartbeat duration is 100ms.
+015141 INFO Sending heartbeat as leader 2 at term 1
+015142 INFO AppendEntries RPC being called in term 1
+015142 INFO AppendEntries RPC being called in term 1
+015450 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.544141s, heartbeat duration is 100ms.
+015451 INFO Sending heartbeat as leader 2 at term 1
+015454 INFO AppendEntries RPC being called in term 1
+015454 INFO AppendEntries RPC being called in term 1
+015761 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.575206375s, heartbeat duration is 100ms.
+015762 INFO Sending heartbeat as leader 2 at term 1
+015764 INFO AppendEntries RPC being called in term 1
+015764 INFO AppendEntries RPC being called in term 1
+016072 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.60629525s, heartbeat duration is 100ms.
+016073 INFO Sending heartbeat as leader 2 at term 1
+016075 INFO AppendEntries RPC being called in term 1
+016076 INFO AppendEntries RPC being called in term 1
+016382 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.637318334s, heartbeat duration is 100ms.
+016383 INFO Sending heartbeat as leader 2 at term 1
+016385 INFO AppendEntries RPC being called in term 1
+016386 INFO AppendEntries RPC being called in term 1
+016692 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.668338667s, heartbeat duration is 100ms.
+016693 INFO Sending heartbeat as leader 2 at term 1
+016695 INFO AppendEntries RPC being called in term 1
+016696 INFO AppendEntries RPC being called in term 1
+017003 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.699431875s, heartbeat duration is 100ms.
+017004 INFO Sending heartbeat as leader 2 at term 1
+017005 INFO AppendEntries RPC being called in term 1
+017005 INFO AppendEntries RPC being called in term 1
+017313 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.730407125s, heartbeat duration is 100ms.
+017314 INFO Sending heartbeat as leader 2 at term 1
+017316 INFO AppendEntries RPC being called in term 1
+017316 INFO AppendEntries RPC being called in term 1
+017623 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.761447375s, heartbeat duration is 100ms.
+017624 INFO Sending heartbeat as leader 2 at term 1
+017626 INFO AppendEntries RPC being called in term 1
+017626 INFO AppendEntries RPC being called in term 1
+017934 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.792524875s, heartbeat duration is 100ms.
+017935 INFO Sending heartbeat as leader 2 at term 1
+017938 INFO AppendEntries RPC being called in term 1
+017938 INFO AppendEntries RPC being called in term 1
+018245 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.823588542s, heartbeat duration is 100ms.
+018246 INFO Sending heartbeat as leader 2 at term 1
+018251 INFO AppendEntries RPC being called in term 1
+018251 INFO AppendEntries RPC being called in term 1
+018555 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.85463s, heartbeat duration is 100ms.
+018556 INFO Sending heartbeat as leader 2 at term 1
+018598 INFO AppendEntries RPC being called in term 1
+018602 INFO AppendEntries RPC being called in term 1
+018858 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.8849395s, heartbeat duration is 100ms.
+018863 INFO Sending heartbeat as leader 2 at term 1
+018867 INFO AppendEntries RPC being called in term 1
+018868 INFO AppendEntries RPC being called in term 1
+019173 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.916382709s, heartbeat duration is 100ms.
+019174 INFO Sending heartbeat as leader 2 at term 1
+019197 INFO AppendEntries RPC being called in term 1
+019198 INFO AppendEntries RPC being called in term 1
+019483 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.947439292s, heartbeat duration is 100ms.
+019484 INFO Sending heartbeat as leader 2 at term 1
+019486 INFO AppendEntries RPC being called in term 1
+019486 INFO AppendEntries RPC being called in term 1
+019794 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 1.978490709s, heartbeat duration is 100ms.
+019794 INFO Sending heartbeat as leader 2 at term 1
+019796 INFO AppendEntries RPC being called in term 1
+019797 INFO AppendEntries RPC being called in term 1
+020105 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.009580292s, heartbeat duration is 100ms.
+020106 INFO Sending heartbeat as leader 2 at term 1
+020108 INFO AppendEntries RPC being called in term 1
+020108 INFO AppendEntries RPC being called in term 1
+020413 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.040432834s, heartbeat duration is 100ms.
+020415 INFO Sending heartbeat as leader 2 at term 1
+020419 INFO AppendEntries RPC being called in term 1
+020419 INFO AppendEntries RPC being called in term 1
+020719 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.070973417s, heartbeat duration is 100ms.
+020720 INFO Sending heartbeat as leader 2 at term 1
+020723 INFO AppendEntries RPC being called in term 1
+020723 INFO AppendEntries RPC being called in term 1
+021029 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.101992875s, heartbeat duration is 100ms.
+021029 INFO Sending heartbeat as leader 2 at term 1
+021031 INFO AppendEntries RPC being called in term 1
+021032 INFO AppendEntries RPC being called in term 1
+021339 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.133040584s, heartbeat duration is 100ms.
+021362 INFO Sending heartbeat as leader 2 at term 1
+021370 INFO AppendEntries RPC being called in term 1
+021371 INFO AppendEntries RPC being called in term 1
+021664 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.165505375s, heartbeat duration is 100ms.
+021665 INFO Sending heartbeat as leader 2 at term 1
+021669 INFO AppendEntries RPC being called in term 1
+021669 INFO AppendEntries RPC being called in term 1
+021968 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.195880459s, heartbeat duration is 100ms.
+021968 INFO Sending heartbeat as leader 2 at term 1
+021971 INFO AppendEntries RPC being called in term 1
+021972 INFO AppendEntries RPC being called in term 1
+022270 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.226076375s, heartbeat duration is 100ms.
+022271 INFO Sending heartbeat as leader 2 at term 1
+022273 INFO AppendEntries RPC being called in term 1
+022273 INFO AppendEntries RPC being called in term 1
+022571 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.256242s, heartbeat duration is 100ms.
+022572 INFO Sending heartbeat as leader 2 at term 1
+022574 INFO AppendEntries RPC being called in term 1
+022574 INFO AppendEntries RPC being called in term 1
+022881 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.287250042s, heartbeat duration is 100ms.
+022882 INFO Sending heartbeat as leader 2 at term 1
+022884 INFO AppendEntries RPC being called in term 1
+022884 INFO AppendEntries RPC being called in term 1
+023184 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.317504709s, heartbeat duration is 100ms.
+023185 INFO Sending heartbeat as leader 2 at term 1
+023186 INFO AppendEntries RPC being called in term 1
+023186 INFO AppendEntries RPC being called in term 1
+023519 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.351008042s, heartbeat duration is 100ms.
+023520 INFO Sending heartbeat as leader 2 at term 1
+023522 INFO AppendEntries RPC being called in term 1
+023522 INFO AppendEntries RPC being called in term 1
+023820 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.381150917s, heartbeat duration is 100ms.
+023821 INFO Sending heartbeat as leader 2 at term 1
+023822 INFO AppendEntries RPC being called in term 1
+023823 INFO AppendEntries RPC being called in term 1
+024131 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.412226542s, heartbeat duration is 100ms.
+024132 INFO Sending heartbeat as leader 2 at term 1
+024133 INFO AppendEntries RPC being called in term 1
+024133 INFO AppendEntries RPC being called in term 1
+024432 LEAD Server 2 (leader) sending heartbeat at term 1. Time elapsed is 2.442300459s, heartbeat duration is 100ms.
+024432 INFO Sending heartbeat as leader 2 at term 1
+024434 INFO AppendEntries RPC being called in term 1
+024434 INFO AppendEntries RPC being called in term 1
+--- FAIL: TestBasicAgree2B (2.46s)
+    config.go:594: one(100) failed to reach agreement
+FAIL
+exit status 1
+FAIL	6.5840/raft	2.660s
