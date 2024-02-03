@@ -1,26 +1,21 @@
 package raft
 
-type Entries []LogEntry
+type Entries []*LogEntry
 
 type LogEntry struct {
 	Term    int
+	Index   int
 	Command interface{}
 }
 
-func (entries Entries) getEntryAt(idx int) LogEntry {
-	if idx < 0 || idx > len(entries) {
-		BetterDebug(dError, "Trying to get log entry with invalid index.\n")
-		return LogEntry{Command: nil, Term: -1}
-	} else if idx == 0 { // log index starts at 1
-		return LogEntry{Command: nil, Term: 0}
-	}
-	return entries[idx-1]
+func (entries Entries) get(idx int) LogEntry {
+	return *entries[idx]
 }
-func (entries Entries) getLastIndex() int {
-	return len(entries)
+func (entries Entries) lastIndex() int {
+	return entries[len(entries)-1].Index
 }
-func (entries Entries) peak() LogEntry {
-	return entries.getEntryAt(len(entries))
+func (entries Entries) lastTerm() int {
+	return entries[len(entries)-1].Term
 }
 
 func (entries Entries) slice(start int, end int) Entries {
@@ -33,5 +28,5 @@ func (entries Entries) slice(start int, end int) Entries {
 	if start <= 0 {
 		return Entries{}
 	}
-	return entries[start-1 : end-1]
+	return entries[start:end]
 }

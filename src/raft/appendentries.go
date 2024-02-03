@@ -1,7 +1,5 @@
 package raft
 
-import "time"
-
 type AppendEntriesArgs struct {
 	Term         int
 	LeaderId     int
@@ -11,8 +9,9 @@ type AppendEntriesArgs struct {
 	LeaderCommit int
 }
 type AppendEntriesReply struct {
-	Term    int
-	Success bool
+	Term         int
+	Success      bool
+	NextTryIndex int
 }
 
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
@@ -27,38 +26,42 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	defer rf.mu.Unlock()
 	BetterDebug(dInfo, "AppendEntries RPC being called in term %v\n", rf.currentTerm)
 	reply.Term = rf.currentTerm
-	rf.lastHeartbeatTime = time.Now()
 	reply.Success = false
 	if args.Term < rf.currentTerm {
+		reply.NextTryIndex = rf.log.lastIndex() + 1
 		return // reply false if term < currentTerm
 	}
-	if args.Entries.getEntryAt(args.PrevLogIndex).Term != args.PrevLogTerm {
+
+	rf.checkOrUpdateTerm(args.Term)
+
+	if args.PrevLogIndex > rf.log.lastIndex() {
 		// reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
+		reply.NextTryIndex = rf.log.lastIndex() + 1
 		return
 	}
-
-	if rf.role == Candidate && rf.currentTerm == args.Term {
-		rf.role = Follower
-	}
-	// conflicting entry
-	rf.checkOrUpdateTerm(args.Term)
-	rf.setElectionTimeout(randHeartbeatTimeout())
-	//rf.electionTimeoutDuration = randomizedElectionTimeout()
+	rf.setElectionTimeout(getRandomHeartbeatTimeout())
+	//rf.setHeartbeatTimeout(getRandomHeartbeatTimeout())
 	rf.leaderId = args.LeaderId
 
-	for i, entry := range args.Entries {
-		indexToGet := i + 1 + args.PrevLogIndex
-		if rf.log.getEntryAt(indexToGet).Term != entry.Term {
-			rf.log = append(rf.log.slice(1, indexToGet), args.Entries[i:]...)
-			break
+	if args.PrevLogIndex >= 0 && rf.log.get(args.PrevLogIndex).Term != args.PrevLogTerm {
+		term := rf.log.get(args.PrevLogIndex).Term
+		for i := args.PrevLogIndex - 1; i >= 0; i-- {
+			if rf.log.get(i).Term != term {
+				reply.NextTryIndex = i + 1
+				break
+			}
 		}
-	}
+	} else if args.PrevLogIndex >= -1 {
+		rf.log = append(rf.log, args.Entries...)
 
-	if args.LeaderCommit > rf.commitIndex {
-		// set commit index
-		lastNewEntry := args.PrevLogIndex + len(args.Entries)
-		rf.commitIndex = min(args.LeaderCommit, lastNewEntry)
-		BetterDebug(dCommit, "Server %v has updated commitIndex to %v at term %v.\n", rf.me, rf.commitIndex, rf.currentTerm)
+		reply.Success = true
+		reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
+
+		if args.LeaderCommit > rf.commitIndex {
+			rf.commitIndex = min(args.LeaderCommit, rf.log.lastIndex())
+			BetterDebug(dCommit, "Server %v has updated commitIndex to %v at term %v.\n", rf.me, rf.commitIndex, rf.currentTerm)
+			go rf.sendLogsThroughApplyCh()
+		}
 	}
 	reply.Success = true
 }
