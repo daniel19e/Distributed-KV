@@ -25,43 +25,34 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	BetterDebug(dInfo, "AppendEntries RPC being called in term %v\n", rf.currentTerm)
-	reply.Term = rf.currentTerm
 	reply.Success = false
 	if args.Term < rf.currentTerm {
-		reply.NextTryIndex = rf.log.lastIndex() + 1
+		reply.Term = rf.currentTerm
 		return // reply false if term < currentTerm
+	}
+	if rf.role == Candidate && rf.currentTerm == args.Term {
+		rf.role = Follower
 	}
 
 	rf.checkOrUpdateTerm(args.Term)
-
-	if args.PrevLogIndex > rf.log.lastIndex() {
-		// reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
-		reply.NextTryIndex = rf.log.lastIndex() + 1
-		return
-	}
+	reply.Term = rf.currentTerm
 	rf.setElectionTimeout(getRandomHeartbeatTimeout())
-	//rf.setHeartbeatTimeout(getRandomHeartbeatTimeout())
 	rf.leaderId = args.LeaderId
 
-	if args.PrevLogIndex >= 0 && rf.log.get(args.PrevLogIndex).Term != args.PrevLogTerm {
-		term := rf.log.get(args.PrevLogIndex).Term
-		for i := args.PrevLogIndex - 1; i >= 0; i-- {
-			if rf.log.get(i).Term != term {
-				reply.NextTryIndex = i + 1
-				break
-			}
-		}
-	} else if args.PrevLogIndex >= -1 {
-		rf.log = append(rf.log, args.Entries...)
+	if args.PrevLogTerm == -1 || args.PrevLogTerm != rf.log.get(args.PrevLogIndex).Term {
+		// reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
+		return
+	}
+	rf.leaderId = args.LeaderId
 
-		reply.Success = true
-		reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
-
-		if args.LeaderCommit > rf.commitIndex {
-			rf.commitIndex = min(args.LeaderCommit, rf.log.lastIndex())
-			BetterDebug(dCommit, "Server %v has updated commitIndex to %v at term %v.\n", rf.me, rf.commitIndex, rf.currentTerm)
-			go rf.sendLogsThroughApplyCh()
+	for i, entry := range args.Entries {
+		if rf.log.get(i+1+args.PrevLogIndex).Term != entry.Term {
+			rf.log = append(rf.log.slice(1, i+1+args.PrevLogIndex), args.Entries[i:]...)
+			break
 		}
+	}
+	if args.LeaderCommit > rf.commitIndex {
+		rf.commitIndex = min(args.LeaderCommit, args.PrevLogIndex+len(args.Entries))
 	}
 	reply.Success = true
 }

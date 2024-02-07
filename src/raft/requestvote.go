@@ -25,15 +25,16 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	defer rf.mu.Unlock()
 	BetterDebug(dVote, "Server %v got a vote request at term %v\n", rf.me, rf.currentTerm)
 
-	reply.Term = rf.currentTerm
 	reply.VoteGranted = false
 	// reply false if term < currentTerm
 	if args.Term < rf.currentTerm {
+		reply.Term = rf.currentTerm
 		return
 	}
 
 	// update current term if term of candidate is higher
 	rf.checkOrUpdateTerm(args.Term)
+	reply.Term = rf.currentTerm
 
 	// check candidate's log is at least as up-to-date as receiver's log
 	lastLogIndex := rf.log.lastIndex()
