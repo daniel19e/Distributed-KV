@@ -20,12 +20,14 @@ package raft
 import (
 	//	"bytes"
 
+	"bytes"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	//	"6.5840/labgob"
+	"6.5840/labgob"
 	"6.5840/labrpc"
 )
 
@@ -134,13 +136,19 @@ func (rf *Raft) GetState() (int, bool) {
 // (or nil if there's not yet a snapshot).
 func (rf *Raft) persist() {
 	// Your code here (2C).
-	// Example:
-	// w := new(bytes.Buffer)
-	// e := labgob.NewEncoder(w)
-	// e.Encode(rf.xxx)
-	// e.Encode(rf.yyy)
-	// raftstate := w.Bytes()
-	// rf.persister.Save(raftstate, nil)
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	if e.Encode(rf.currentTerm) != nil {
+		BetterDebug(dError, "Error encoding rf.currentTerm. %v\n", rf.currentTerm)
+	}
+	if e.Encode(rf.votedFor) != nil {
+		BetterDebug(dError, "Error encoding rf.votedFor. %v\n", rf.votedFor)
+	}
+	if e.Encode(rf.log) != nil {
+		BetterDebug(dError, "Error encoding rf.log. %v\n", rf.log)
+	}
+	raftstate := w.Bytes()
+	rf.persister.Save(raftstate, nil)
 }
 
 // restore previously persisted state.
@@ -149,18 +157,21 @@ func (rf *Raft) readPersist(data []byte) {
 		return
 	}
 	// Your code here (2C).
-	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := labgob.NewDecoder(r)
-	// var xxx
-	// var yyy
-	// if d.Decode(&xxx) != nil ||
-	//    d.Decode(&yyy) != nil {
-	//   error...
-	// } else {
-	//   rf.xxx = xxx
-	//   rf.yyy = yyy
-	// }
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	currentTerm := rf.currentTerm
+	votedFor := rf.votedFor
+	log := rf.log
+	if d.Decode(&currentTerm) != nil ||
+		d.Decode(&votedFor) != nil || d.Decode(&log) != nil {
+		BetterDebug(dError, "Error decoding\n")
+	} else {
+		rf.currentTerm = currentTerm
+		rf.votedFor = votedFor
+		rf.log = log
+	}
 }
 
 // the service says it has created a snapshot that has
@@ -229,6 +240,7 @@ func (rf *Raft) checkOrUpdateTerm(termToCheck int) bool {
 		rf.votedFor = -1
 		rf.currentTerm = termToCheck
 		rf.leaderId = -1
+		rf.persist()
 		return true
 	}
 	return false
@@ -263,6 +275,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	rf.log = append(rf.log, entry)
 	// index needs to be computed AFTER appending new log entry
 	index = len(rf.log)
+	rf.persist()
 	rf.sendEntriesToPeers(false)
 	BetterDebug(dLog, "Server %v added command %v (index %v) to the log in term %v\n", rf.me, command, index, term)
 
@@ -351,10 +364,10 @@ func (rf *Raft) startElection() {
 	// 2. vote for self
 	// 3. reset election timer
 	// 4. send RequestVote RPCs to all other servers
-	//rf.changeRoleTo(Candidate)
 	rf.currentTerm++
 	BetterDebug(dTerm, "Server %v has started a new term. Election has started. %v\n", rf.me, rf.currentTerm)
 	rf.votedFor = rf.me
+	rf.persist()
 	rf.setElectionTimeout(getRandomElectionTimeout())
 	args := &RequestVoteArgs{
 		Term:         rf.currentTerm,
@@ -394,9 +407,17 @@ func (rf *Raft) handleLeaderSendingEntries(args *AppendEntriesArgs, server int) 
 			rf.maybeUpdateCommitIndex()
 		} else {
 			// call not successful, retry the request
-			if rf.nextIndex[server] > 1 {
-				// need to decrease next index bc request just failed
-				rf.nextIndex[server]--
+
+			// optimization
+			if reply.ConflictingTerm == -1 {
+				rf.nextIndex[server] = reply.LogLength + 1
+			} else {
+				_, end := rf.log.findTermRange(reply.ConflictingTerm)
+				if end != -1 {
+					rf.nextIndex[server] = end
+				} else {
+					rf.nextIndex[server] = reply.ConflictingIndex
+				}
 			}
 			last := rf.log.lastIndex()
 			next := rf.nextIndex[server]

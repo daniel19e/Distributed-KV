@@ -9,9 +9,15 @@ type AppendEntriesArgs struct {
 	LeaderCommit int
 }
 type AppendEntriesReply struct {
-	Term         int
-	Success      bool
-	NextTryIndex int
+	Term    int
+	Success bool
+	// these 3 fields are for implementing an optimization needed to solve
+	// the issue described in Figure 8 of the Raft paper
+	// the optimization tries to reduce the number of rejected AppendEntries RPCs
+	// by decrementing nextIndex to bypass all of the conflicting entries in a given term
+	ConflictingTerm  int
+	ConflictingIndex int
+	LogLength        int
 }
 
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
@@ -41,6 +47,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	if args.PrevLogTerm == -1 || args.PrevLogTerm != rf.log.get(args.PrevLogIndex).Term {
 		// reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
+
+		// optimization
+		reply.LogLength = len(rf.log)
+		reply.ConflictingTerm = rf.log.get(args.PrevLogIndex).Term
+		reply.ConflictingIndex, _ = rf.log.findTermRange(reply.ConflictingTerm)
 		return
 	}
 	rf.leaderId = args.LeaderId
@@ -51,6 +62,12 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			break
 		}
 	}
+
+	if len(args.Entries) > 0 {
+		// store current raft state if new entries came in
+		rf.persist()
+	}
+
 	if args.LeaderCommit > rf.commitIndex {
 		rf.commitIndex = min(args.LeaderCommit, args.PrevLogIndex+len(args.Entries))
 	}

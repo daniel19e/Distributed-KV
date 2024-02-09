@@ -1,6 +1,9 @@
 package raft
 
-import "log"
+import (
+	"log"
+	"math"
+)
 
 type Entries []LogEntry
 
@@ -11,6 +14,14 @@ type LogEntry struct {
 
 func minInt(x int, y int) int {
 	if x < y {
+		return x
+	} else {
+		return y
+	}
+}
+
+func maxInt(x int, y int) int {
+	if x > y {
 		return x
 	} else {
 		return y
@@ -54,4 +65,22 @@ func (entries Entries) slice(start int, end int) Entries {
 		log.Panic("slice: start > end.\n")
 	}
 	return entries[start-1 : end-1]
+}
+
+func (entries Entries) findTermRange(term int) (int, int) {
+	if term == 0 {
+		return 0, 0
+	} else {
+		start, end := math.MaxInt, -1
+		for i := 1; i <= len(entries); i++ {
+			if entries.get(i).Term == term {
+				start = minInt(start, i)
+				end = maxInt(end, i)
+			}
+		}
+		if end == -1 {
+			return -1, -1
+		}
+		return start, end
+	}
 }
