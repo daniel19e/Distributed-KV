@@ -37,8 +37,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	reply.Term = rf.currentTerm
 
 	// check candidate's log is at least as up-to-date as receiver's log
-	lastLogIndex := rf.log.lastIndex()
-	lastLogTerm := rf.log.lastTerm()
+	lastLogIndex := rf.lastIndex()
+	lastLogTerm := rf.lastTerm()
 	isLogUpToDate := args.LastLogTerm > lastLogTerm ||
 		(args.LastLogTerm == lastLogTerm && args.LastLogIndex >= lastLogIndex)
 
@@ -47,7 +47,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			BetterDebug(dVote, "Server %v log is up to date. Vote granted\n", rf.me)
 			reply.VoteGranted = true
 			rf.votedFor = args.CandidateId
-			rf.setElectionTimeout(getRandomElectionTimeout())
+			rf.resetElectionTime(getRandomElectionTimeout())
 		}
 	}
 }

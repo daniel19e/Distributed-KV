@@ -9,7 +9,7 @@ package raft
 //   create a new Raft server.
 // rf.Start(command interface{}) (index, term, isleader)
 //   start agreement on a new log entry
-// rf[State() (term, isLeader)
+// rf.GetState() (term, isLeader)
 //   ask a Raft for its current term, and whether it thinks it is leader
 // ApplyMsg
 //   each time a new entry is committed to the log, each Raft peer
@@ -57,21 +57,21 @@ const HeartbeatInterval = 100
 
 func getRandomElectionTimeout() time.Duration {
 	const baseTime int64 = 1000
-	randomTime := int64(float64(rand.Int63()%baseTime) * RandomFactor)
+	randomTime := int64(RandomFactor * float64(rand.Int63()%baseTime))
 	return time.Duration(randomTime+baseTime) * time.Millisecond
 }
 
 func getRandomHeartbeatTimeout() time.Duration {
 	const baseTime int64 = 300
-	randomTime := int64(float64(rand.Int63()%baseTime) * RandomFactor)
+	randomTime := int64(RandomFactor * float64(rand.Int63()%baseTime))
 	return time.Duration(randomTime+baseTime) * time.Millisecond
 }
 
-func (rf *Raft) setElectionTimeout(timeout time.Duration) {
+func (rf *Raft) resetElectionTime(timeout time.Duration) {
 	rf.electionTime = time.Now().Add(timeout)
 }
 
-func (rf *Raft) setHeartbeatTimeout(timeout time.Duration) {
+func (rf *Raft) resetHeartbeatTime(timeout time.Duration) {
 	rf.heartbeatTime = time.Now().Add(timeout)
 }
 
@@ -82,8 +82,6 @@ const (
 	Candidate Role = 2
 	Leader    Role = 3
 )
-
-const HeartbeatTime = 100
 
 // A Go object implementing a single Raft peer.
 type Raft struct {
@@ -118,6 +116,7 @@ type Raft struct {
 	// snapshot state
 	lastIncludedIndex int
 	lastIncludedTerm  int
+	snapshot          []byte
 }
 
 // return currentTerm and whether this server
@@ -136,8 +135,7 @@ func (rf *Raft) GetState() (int, bool) {
 // second argument to persister.Save().
 // after you've implemented snapshots, pass the current snapshot
 // (or nil if there's not yet a snapshot).
-func (rf *Raft) persist() {
-	// Your code here (2C).
+func (rf *Raft) persist(snapshot bool) {
 	w := new(bytes.Buffer)
 	e := labgob.NewEncoder(w)
 	if e.Encode(rf.currentTerm) != nil {
@@ -149,8 +147,18 @@ func (rf *Raft) persist() {
 	if e.Encode(rf.log) != nil {
 		BetterDebug(dError, "Error encoding rf.log. %v\n", rf.log)
 	}
+	if e.Encode(rf.lastIncludedIndex) != nil {
+		BetterDebug(dError, "Error encoding rf.lastIncludedIndex. %v\n", rf.lastIncludedIndex)
+	}
+	if e.Encode(rf.lastIncludedTerm) != nil {
+		BetterDebug(dError, "Error encoding rf.lastIncludedTerm. %v\n", rf.lastIncludedTerm)
+	}
 	raftstate := w.Bytes()
-	rf.persister.Save(raftstate, nil)
+	if snapshot {
+		rf.persister.Save(raftstate, rf.snapshot)
+	} else {
+		rf.persister.Save(raftstate, nil)
+	}
 }
 
 // restore previously persisted state.
@@ -166,13 +174,20 @@ func (rf *Raft) readPersist(data []byte) {
 	currentTerm := rf.currentTerm
 	votedFor := rf.votedFor
 	log := rf.log
+	lastIncludedIndex := rf.lastIncludedIndex
+	lastIncludedTerm := rf.lastIncludedTerm
 	if d.Decode(&currentTerm) != nil ||
-		d.Decode(&votedFor) != nil || d.Decode(&log) != nil {
+		d.Decode(&votedFor) != nil ||
+		d.Decode(&log) != nil ||
+		d.Decode(&lastIncludedIndex) != nil ||
+		d.Decode(&lastIncludedTerm) != nil {
 		BetterDebug(dError, "Error decoding\n")
 	} else {
 		rf.currentTerm = currentTerm
 		rf.votedFor = votedFor
 		rf.log = log
+		rf.lastIncludedIndex = lastIncludedIndex
+		rf.lastIncludedTerm = lastIncludedTerm
 	}
 }
 
@@ -182,7 +197,30 @@ func (rf *Raft) readPersist(data []byte) {
 // that index. Raft should now trim its log as much as possible.
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
+	//fmt.Print("start of snapshot method\n")
+	BetterDebug(dSnap, "Server %v received snapshot through index %v\n", rf.me, index)
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	if rf.lastIncludedIndex >= index {
+		BetterDebug(dSnap, "Server %v received snapshot through index %v, but it is already up to date. Last index is %v\n", rf.me, index, rf.lastIncludedIndex)
+		return
+	}
+	//	fmt.Print("after last >= index\n")
+	if rf.commitIndex < index {
+		BetterDebug(dSnap, "Server %v received snapshot through index %v, but it is not committed. CommitIndex is %v\n", rf.me, index, rf.commitIndex)
+		return
+	}
+	//fmt.Print("after commitIndex < index\n")
 
+	// might have to fix this
+	newLog := rf.getTrimmedLogSlice(index+1, rf.lastIndex()+1)
+	newLastIncludeTerm := rf.getLogEntryAt(index).Term
+
+	rf.lastIncludedTerm = newLastIncludeTerm
+	rf.log = newLog
+	rf.lastIncludedIndex = index
+	rf.snapshot = snapshot
+	rf.persist( /*snapshot = */ true)
 }
 
 // example code to send a RequestVote RPC to a server.
@@ -222,6 +260,11 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	return ok
 }
 
+func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply *InstallSnapshotReply) bool {
+	ok := rf.peers[server].Call("Raft.InstallSnapshot", args, reply)
+	return ok
+}
+
 func (rf *Raft) changeRoleTo(role Role) {
 	BetterDebug(dInfo, "Server %v trying to switch role %v to role %v\n", rf.me, rf.role, role)
 	if rf.role != role {
@@ -242,7 +285,7 @@ func (rf *Raft) checkOrUpdateTerm(termToCheck int) bool {
 		rf.votedFor = -1
 		rf.currentTerm = termToCheck
 		rf.leaderId = -1
-		rf.persist()
+		rf.persist( /*snapshot = */ false)
 		return true
 	}
 	return false
@@ -265,7 +308,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	term := -1
 	isLeader := true
 
-	// Your code here (2B).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	if rf.role != Leader {
@@ -277,8 +319,8 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	rf.log = append(rf.log, entry)
 	// index needs to be computed AFTER appending new log entry
 	index = len(rf.log)
-	rf.persist()
-	rf.sendEntriesToPeers(false)
+	rf.persist( /*snapshot = */ false)
+	rf.sendEntriesToPeers( /* isHeartbeatOnly = */ false)
 	BetterDebug(dLog, "Server %v added command %v (index %v) to the log in term %v\n", rf.me, command, index, term)
 
 	return index, term, isLeader
@@ -307,7 +349,7 @@ func (rf *Raft) killed() bool {
 // of matchIndex[server] ≥ N, and log[N].term == currentTerm:
 // set commitIndex = N (§5.3, §5.4).
 func (rf *Raft) maybeUpdateCommitIndex() {
-	for N := rf.log.lastIndex(); N > rf.commitIndex && rf.log.get(N).Term == rf.currentTerm; N-- {
+	for N := rf.lastIndex(); N > rf.commitIndex && rf.getLogEntryAt(N).Term == rf.currentTerm; N-- {
 		count := 1
 		for server, matchIndex := range rf.matchIndex {
 			if server != rf.me && matchIndex >= N {
@@ -327,13 +369,13 @@ func (rf *Raft) maybeUpdateCommitIndex() {
 func (rf *Raft) becomeLeader() {
 	BetterDebug(dLeader, "Server %v received the majority votes. It is now leader.\n", rf.me)
 	rf.changeRoleTo(Leader)
-	lastLogIndex := rf.log.lastIndex()
+	lastLogIndex := rf.lastIndex()
 	for server := range rf.peers {
 		rf.nextIndex[server] = lastLogIndex + 1
 		rf.matchIndex[server] = 0
 	}
 	// send initial heartbeat
-	rf.sendEntriesToPeers(true)
+	rf.sendEntriesToPeers( /* isHeartbeatOnly = */ true)
 }
 
 func (rf *Raft) handleCandidateRequestingVote(args *RequestVoteArgs, server int, numVotes *int, once *sync.Once) {
@@ -369,13 +411,13 @@ func (rf *Raft) startElection() {
 	rf.currentTerm++
 	BetterDebug(dTerm, "Server %v has started a new term. Election has started. %v\n", rf.me, rf.currentTerm)
 	rf.votedFor = rf.me
-	rf.persist()
-	rf.setElectionTimeout(getRandomElectionTimeout())
+	rf.persist( /*snapshot = */ false)
+	rf.resetElectionTime(getRandomElectionTimeout())
 	args := &RequestVoteArgs{
 		Term:         rf.currentTerm,
 		CandidateId:  rf.me,
-		LastLogIndex: rf.log.lastIndex(),
-		LastLogTerm:  rf.log.lastTerm(),
+		LastLogIndex: rf.lastIndex(),
+		LastLogTerm:  rf.lastTerm(),
 	}
 	once := sync.Once{}
 	numVotes := 1 // start with one because server voted for itself
@@ -414,23 +456,23 @@ func (rf *Raft) handleLeaderSendingEntries(args *AppendEntriesArgs, server int) 
 			if reply.ConflictingTerm == -1 {
 				rf.nextIndex[server] = reply.LogLength + 1
 			} else {
-				_, end := rf.log.findTermRange(reply.ConflictingTerm)
+				_, end := rf.findTermRange(reply.ConflictingTerm)
 				if end != -1 {
 					rf.nextIndex[server] = end
 				} else {
 					rf.nextIndex[server] = reply.ConflictingIndex
 				}
 			}
-			last := rf.log.lastIndex()
+			last := rf.lastIndex()
 			next := rf.nextIndex[server]
 			if last >= next {
 				entries := make([]LogEntry, last-next+1)
-				copy(entries, rf.log.slice(next, last+1))
+				copy(entries, rf.getTrimmedLogSlice(next, last+1))
 				retryArgs := &AppendEntriesArgs{
 					Term:         rf.currentTerm,
 					LeaderId:     rf.me,
 					PrevLogIndex: next - 1,
-					PrevLogTerm:  rf.log.get(next - 1).Term,
+					PrevLogTerm:  rf.getLogEntryAt(next - 1).Term,
 					Entries:      entries,
 				}
 				go rf.handleLeaderSendingEntries(retryArgs, server)
@@ -441,9 +483,9 @@ func (rf *Raft) handleLeaderSendingEntries(args *AppendEntriesArgs, server int) 
 
 func (rf *Raft) sendEntriesToPeers(heartbeatOnly bool) {
 	BetterDebug(dLeader, "Server %v is sending entries to peers. Log looks like %v\n", rf.me, rf.log)
-	rf.setHeartbeatTimeout(time.Duration(HeartbeatInterval) * time.Millisecond)
-	rf.setElectionTimeout(getRandomHeartbeatTimeout())
-	last := rf.log.lastIndex()
+	rf.resetHeartbeatTime(time.Duration(HeartbeatInterval) * time.Millisecond)
+	rf.resetElectionTime(getRandomHeartbeatTimeout())
+	last := rf.lastIndex()
 	for server := range rf.peers {
 		if server == rf.me {
 			continue
@@ -453,16 +495,17 @@ func (rf *Raft) sendEntriesToPeers(heartbeatOnly bool) {
 			Term:         rf.currentTerm,
 			LeaderId:     rf.me,
 			PrevLogIndex: next - 1,
-			PrevLogTerm:  rf.log.get(next - 1).Term,
+			PrevLogTerm:  rf.getLogEntryAt(next - 1).Term,
 			LeaderCommit: rf.commitIndex,
 		}
 		if last >= next {
-			entries := make([]LogEntry, last-next+1)
-			copy(entries, rf.log.slice(next, last+1))
+			entries := make(Entries, last-next+1)
+			copy(entries, rf.getTrimmedLogSlice(next, last+1))
 			args.Entries = entries
 			go rf.handleLeaderSendingEntries(args, server)
 		} else if heartbeatOnly {
-			args.Entries = make([]LogEntry, 0)
+			// send empty AppendEntries RPC to peer
+			args.Entries = make(Entries, 0)
 			go rf.handleLeaderSendingEntries(args, server)
 		}
 	}
@@ -474,7 +517,7 @@ func (rf *Raft) ticker() {
 		case Leader:
 			if time.Now().After(rf.heartbeatTime) {
 				BetterDebug(dLeader, "Server %v (leader) sending heartbeat at term %v.\n", rf.me, rf.currentTerm)
-				rf.sendEntriesToPeers(true)
+				rf.sendEntriesToPeers( /*heartbeatOnly = */ true)
 			}
 		case Candidate:
 			if time.Now().After(rf.electionTime) {
@@ -501,13 +544,14 @@ func (rf *Raft) sendLogsThroughApplyCh(applyCh chan ApplyMsg) {
 			rf.lastApplied++
 			messages = append(messages, ApplyMsg{
 				CommandValid: true,
-				Command:      rf.log.get(rf.lastApplied).Command,
+				Command:      rf.getLogEntryAt(rf.lastApplied).Command,
 				CommandIndex: rf.lastApplied,
 			})
 			BetterDebug(dLog, "Server %v is applying log at term %v, last applied is %v, commitIndex is %v, log %v\n",
 				rf.me, rf.currentTerm, rf.lastApplied, rf.commitIndex, rf.log)
 		}
 		rf.mu.Unlock()
+		// send all messages in the batch through channel
 		for _, message := range messages {
 			applyCh <- message
 		}
@@ -532,15 +576,16 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.persister = persister
 	rf.me = me
 
-	// Your initialization code here (2A, 2B, 2C).
+	rf.currentTerm = 0
+	rf.role = Follower
 	rf.commitIndex = 0
 	rf.lastApplied = 0
 	rf.votedFor = -1
 	rf.leaderId = -1
-	rf.currentTerm = 0
-	rf.role = Follower
+	rf.lastIncludedIndex = 0
+	rf.lastIncludedTerm = 0
 
-	rf.setElectionTimeout(getRandomHeartbeatTimeout())
+	rf.resetElectionTime(getRandomHeartbeatTimeout())
 
 	rf.log = make(Entries, 0)
 	rf.nextIndex = make([]int, len(rf.peers))
@@ -555,6 +600,5 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// start goroutine to send logs through applyCh
 	go rf.sendLogsThroughApplyCh(applyCh)
-
 	return rf
 }

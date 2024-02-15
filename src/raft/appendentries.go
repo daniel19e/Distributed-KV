@@ -42,30 +42,30 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	rf.checkOrUpdateTerm(args.Term)
 	reply.Term = rf.currentTerm
-	rf.setElectionTimeout(getRandomHeartbeatTimeout())
+	rf.resetElectionTime(getRandomHeartbeatTimeout())
 	rf.leaderId = args.LeaderId
 
-	if args.PrevLogTerm == -1 || args.PrevLogTerm != rf.log.get(args.PrevLogIndex).Term {
+	if args.PrevLogTerm == -1 || args.PrevLogTerm != rf.getLogEntryAt(args.PrevLogIndex).Term {
 		// reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
 
 		// optimization
 		reply.LogLength = len(rf.log)
-		reply.ConflictingTerm = rf.log.get(args.PrevLogIndex).Term
-		reply.ConflictingIndex, _ = rf.log.findTermRange(reply.ConflictingTerm)
+		reply.ConflictingTerm = rf.getLogEntryAt(args.PrevLogIndex).Term
+		reply.ConflictingIndex, _ = rf.findTermRange(reply.ConflictingTerm)
 		return
 	}
 	rf.leaderId = args.LeaderId
 
 	for i, entry := range args.Entries {
-		if rf.log.get(i+1+args.PrevLogIndex).Term != entry.Term {
-			rf.log = append(rf.log.slice(1, i+1+args.PrevLogIndex), args.Entries[i:]...)
+		if rf.getLogEntryAt(i+1+args.PrevLogIndex).Term != entry.Term {
+			rf.log = append(rf.getTrimmedLogSlice(1+rf.lastIncludedIndex, i+1+args.PrevLogIndex), args.Entries[i:]...)
 			break
 		}
 	}
 
 	if len(args.Entries) > 0 {
 		// store current raft state if new entries came in
-		rf.persist()
+		rf.persist( /*snapshot = */ false)
 	}
 
 	if args.LeaderCommit > rf.commitIndex {
