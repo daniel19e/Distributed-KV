@@ -45,11 +45,26 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.resetElectionTime(getRandomHeartbeatTimeout())
 	rf.leaderId = args.LeaderId
 
+	if args.PrevLogIndex < rf.lastIncludedIndex {
+		if rf.lastIncludedIndex-args.PrevLogIndex <= len(args.Entries) {
+			args = &AppendEntriesArgs{
+				Term:         args.Term,
+				LeaderId:     args.LeaderId,
+				PrevLogTerm:  rf.lastIncludedTerm,
+				PrevLogIndex: rf.lastIncludedIndex,
+				Entries:      args.Entries[rf.lastIncludedIndex-args.PrevLogIndex:],
+				LeaderCommit: args.LeaderCommit,
+			}
+		} else {
+			reply.Success = true
+			return
+		}
+	}
+
 	if args.PrevLogTerm == -1 || args.PrevLogTerm != rf.getLogEntryAt(args.PrevLogIndex).Term {
 		// reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
-
 		// optimization
-		reply.LogLength = len(rf.log)
+		reply.LogLength = len(rf.log) + rf.lastIncludedIndex
 		reply.ConflictingTerm = rf.getLogEntryAt(args.PrevLogIndex).Term
 		reply.ConflictingIndex, _ = rf.findTermRange(reply.ConflictingTerm)
 		return
@@ -65,7 +80,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	if len(args.Entries) > 0 {
 		// store current raft state if new entries came in
-		rf.persist( /*snapshot = */ false)
+		rf.persist()
 	}
 
 	if args.LeaderCommit > rf.commitIndex {

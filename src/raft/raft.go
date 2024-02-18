@@ -21,6 +21,7 @@ import (
 	//	"bytes"
 
 	"bytes"
+	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -117,6 +118,10 @@ type Raft struct {
 	lastIncludedIndex int
 	lastIncludedTerm  int
 	snapshot          []byte
+
+	tempLastIncludedIndex int
+	tempLastIncludedTerm  int
+	tempSnapshot          []byte
 }
 
 // return currentTerm and whether this server
@@ -135,7 +140,9 @@ func (rf *Raft) GetState() (int, bool) {
 // second argument to persister.Save().
 // after you've implemented snapshots, pass the current snapshot
 // (or nil if there's not yet a snapshot).
-func (rf *Raft) persist(snapshot bool) {
+func (rf *Raft) persist() {
+	//fmt.Printf("calling persist, rf.lastIncludedIndex: %v, rf.lastIncludedTerm: %v, rf.tempLastIncludedIndex: %v, rf.tempLastIncludedTerm: %v\n",
+	//	rf.lastIncludedIndex, rf.lastIncludedTerm, rf.tempLastIncludedIndex, rf.tempLastIncludedTerm)
 	w := new(bytes.Buffer)
 	e := labgob.NewEncoder(w)
 	if e.Encode(rf.currentTerm) != nil {
@@ -154,11 +161,11 @@ func (rf *Raft) persist(snapshot bool) {
 		BetterDebug(dError, "Error encoding rf.lastIncludedTerm. %v\n", rf.lastIncludedTerm)
 	}
 	raftstate := w.Bytes()
-	if snapshot {
-		rf.persister.Save(raftstate, rf.snapshot)
-	} else {
-		rf.persister.Save(raftstate, nil)
+	//fmt.Printf("rf.snapshot %v and currently stored snapshot %v\n", rf.snapshot, rf.persister.snapshot)
+	if rf.snapshot == nil && rf.persister.snapshot != nil {
+		rf.snapshot = rf.persister.snapshot
 	}
+	rf.persister.Save(raftstate, rf.snapshot)
 }
 
 // restore previously persisted state.
@@ -188,6 +195,7 @@ func (rf *Raft) readPersist(data []byte) {
 		rf.log = log
 		rf.lastIncludedIndex = lastIncludedIndex
 		rf.lastIncludedTerm = lastIncludedTerm
+		//fmt.Printf("server %v readPersist: lastIncludedIndex: %v, lastIncludedTerm: %v\n", rf.me, lastIncludedIndex, lastIncludedTerm)
 	}
 }
 
@@ -197,7 +205,6 @@ func (rf *Raft) readPersist(data []byte) {
 // that index. Raft should now trim its log as much as possible.
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
-	//fmt.Print("start of snapshot method\n")
 	BetterDebug(dSnap, "Server %v received snapshot through index %v\n", rf.me, index)
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -205,14 +212,16 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 		BetterDebug(dSnap, "Server %v received snapshot through index %v, but it is already up to date. Last index is %v\n", rf.me, index, rf.lastIncludedIndex)
 		return
 	}
-	//	fmt.Print("after last >= index\n")
 	if rf.commitIndex < index {
 		BetterDebug(dSnap, "Server %v received snapshot through index %v, but it is not committed. CommitIndex is %v\n", rf.me, index, rf.commitIndex)
 		return
 	}
-	//fmt.Print("after commitIndex < index\n")
+	if rf.lastApplied < index {
+		rf.lastApplied = index
+	}
 
 	// might have to fix this
+
 	newLog := rf.getTrimmedLogSlice(index+1, rf.lastIndex()+1)
 	newLastIncludeTerm := rf.getLogEntryAt(index).Term
 
@@ -220,7 +229,7 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	rf.log = newLog
 	rf.lastIncludedIndex = index
 	rf.snapshot = snapshot
-	rf.persist( /*snapshot = */ true)
+	rf.persist()
 }
 
 // example code to send a RequestVote RPC to a server.
@@ -285,7 +294,7 @@ func (rf *Raft) checkOrUpdateTerm(termToCheck int) bool {
 		rf.votedFor = -1
 		rf.currentTerm = termToCheck
 		rf.leaderId = -1
-		rf.persist( /*snapshot = */ false)
+		rf.persist()
 		return true
 	}
 	return false
@@ -318,8 +327,8 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	entry := LogEntry{Command: command, Term: rf.currentTerm}
 	rf.log = append(rf.log, entry)
 	// index needs to be computed AFTER appending new log entry
-	index = len(rf.log)
-	rf.persist( /*snapshot = */ false)
+	index = len(rf.log) + rf.lastIncludedIndex
+	rf.persist()
 	rf.sendEntriesToPeers( /* isHeartbeatOnly = */ false)
 	BetterDebug(dLog, "Server %v added command %v (index %v) to the log in term %v\n", rf.me, command, index, term)
 
@@ -411,7 +420,7 @@ func (rf *Raft) startElection() {
 	rf.currentTerm++
 	BetterDebug(dTerm, "Server %v has started a new term. Election has started. %v\n", rf.me, rf.currentTerm)
 	rf.votedFor = rf.me
-	rf.persist( /*snapshot = */ false)
+	rf.persist()
 	rf.resetElectionTime(getRandomElectionTimeout())
 	args := &RequestVoteArgs{
 		Term:         rf.currentTerm,
@@ -451,7 +460,6 @@ func (rf *Raft) handleLeaderSendingEntries(args *AppendEntriesArgs, server int) 
 			rf.maybeUpdateCommitIndex()
 		} else {
 			// call not successful, retry the request
-
 			// optimization
 			if reply.ConflictingTerm == -1 {
 				rf.nextIndex[server] = reply.LogLength + 1
@@ -465,15 +473,15 @@ func (rf *Raft) handleLeaderSendingEntries(args *AppendEntriesArgs, server int) 
 			}
 			last := rf.lastIndex()
 			next := rf.nextIndex[server]
-			if last >= next {
-				entries := make([]LogEntry, last-next+1)
-				copy(entries, rf.getTrimmedLogSlice(next, last+1))
+			if next <= rf.lastIncludedIndex {
+				rf.handleSendingSnapshot(server)
+			} else if last >= next {
 				retryArgs := &AppendEntriesArgs{
 					Term:         rf.currentTerm,
 					LeaderId:     rf.me,
 					PrevLogIndex: next - 1,
 					PrevLogTerm:  rf.getLogEntryAt(next - 1).Term,
-					Entries:      entries,
+					Entries:      rf.getTrimmedLogSlice(next, last+1),
 				}
 				go rf.handleLeaderSendingEntries(retryArgs, server)
 			}
@@ -491,6 +499,10 @@ func (rf *Raft) sendEntriesToPeers(heartbeatOnly bool) {
 			continue
 		}
 		next := rf.nextIndex[server]
+		if next <= rf.lastIncludedIndex {
+			rf.handleSendingSnapshot(server)
+			continue
+		}
 		args := &AppendEntriesArgs{
 			Term:         rf.currentTerm,
 			LeaderId:     rf.me,
@@ -499,9 +511,7 @@ func (rf *Raft) sendEntriesToPeers(heartbeatOnly bool) {
 			LeaderCommit: rf.commitIndex,
 		}
 		if last >= next {
-			entries := make(Entries, last-next+1)
-			copy(entries, rf.getTrimmedLogSlice(next, last+1))
-			args.Entries = entries
+			args.Entries = rf.getTrimmedLogSlice(next, last+1)
 			go rf.handleLeaderSendingEntries(args, server)
 		} else if heartbeatOnly {
 			// send empty AppendEntries RPC to peer
@@ -509,6 +519,34 @@ func (rf *Raft) sendEntriesToPeers(heartbeatOnly bool) {
 			go rf.handleLeaderSendingEntries(args, server)
 		}
 	}
+}
+
+func (rf *Raft) handleSendingSnapshot(server int) {
+	BetterDebug(dSnap, "Server %v is sending snapshot to peer %v\n", rf.me, server)
+	args := &InstallSnapshotArgs{
+		Term:              rf.currentTerm,
+		LeaderId:          rf.me,
+		LastIncludedIndex: rf.lastIncludedIndex,
+		LastIncludedTerm:  rf.lastIncludedTerm,
+		Data:              rf.snapshot,
+	}
+	go func(args *InstallSnapshotArgs, server int) {
+		reply := &InstallSnapshotReply{}
+		ok := rf.sendInstallSnapshot(server, args, reply)
+		if ok {
+			rf.mu.Lock()
+			defer rf.mu.Unlock()
+			if reply.Term < rf.currentTerm || rf.currentTerm != args.Term {
+				// invalid reply
+				return
+			}
+			rf.checkOrUpdateTerm(reply.Term)
+			next := args.LastIncludedIndex + 1
+			match := args.LastIncludedIndex
+			rf.nextIndex[server] = maxInt(next, rf.nextIndex[server])
+			rf.matchIndex[server] = maxInt(match, rf.matchIndex[server])
+		}
+	}(args, server)
 }
 func (rf *Raft) ticker() {
 	for rf.killed() == false {
@@ -535,25 +573,37 @@ func (rf *Raft) ticker() {
 	}
 }
 
-func (rf *Raft) sendLogsThroughApplyCh(applyCh chan ApplyMsg) {
+func (rf *Raft) sendLogsThroughApplyCh() {
 	// add messages until we get to commit index
 	for rf.killed() == false {
 		rf.mu.Lock()
 		messages := []ApplyMsg{}
-		for rf.lastApplied < rf.commitIndex {
-			rf.lastApplied++
+		rf.lastApplied = maxInt(rf.lastApplied, rf.lastIncludedIndex)
+		if rf.tempSnapshot != nil {
 			messages = append(messages, ApplyMsg{
-				CommandValid: true,
-				Command:      rf.getLogEntryAt(rf.lastApplied).Command,
-				CommandIndex: rf.lastApplied,
+				SnapshotValid: true,
+				Snapshot:      rf.tempSnapshot,
+				SnapshotTerm:  rf.tempLastIncludedTerm,
+				SnapshotIndex: rf.tempLastIncludedIndex,
 			})
-			BetterDebug(dLog, "Server %v is applying log at term %v, last applied is %v, commitIndex is %v, log %v\n",
-				rf.me, rf.currentTerm, rf.lastApplied, rf.commitIndex, rf.log)
+			rf.tempSnapshot = nil
+		} else {
+			for rf.lastApplied < rf.commitIndex {
+				rf.lastApplied++
+				messages = append(messages, ApplyMsg{
+					CommandValid: true,
+					Command:      rf.getLogEntryAt(rf.lastApplied).Command,
+					CommandIndex: rf.lastApplied,
+				})
+				BetterDebug(dLog, "Server %v is applying log at term %v, last applied is %v, commitIndex is %v, log %v\n",
+					rf.me, rf.currentTerm, rf.lastApplied, rf.commitIndex, rf.log)
+			}
 		}
 		rf.mu.Unlock()
 		// send all messages in the batch through channel
 		for _, message := range messages {
-			applyCh <- message
+			//	fmt.Printf("Server %v sending message %v\n", rf.me, message)
+			rf.applyCh <- message
 		}
 		time.Sleep(time.Duration(30) * time.Millisecond)
 	}
@@ -571,6 +621,7 @@ func (rf *Raft) sendLogsThroughApplyCh(applyCh chan ApplyMsg) {
 // for any long-running work.
 func Make(peers []*labrpc.ClientEnd, me int,
 	persister *Persister, applyCh chan ApplyMsg) *Raft {
+	fmt.Printf("make being called for server %v \n", me)
 	rf := &Raft{}
 	rf.peers = peers
 	rf.persister = persister
@@ -590,15 +641,16 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.log = make(Entries, 0)
 	rf.nextIndex = make([]int, len(rf.peers))
 	rf.matchIndex = make([]int, len(rf.peers))
+	rf.applyCh = applyCh
 
 	// initialize from state persisted before a crash
 	BetterDebug(dInfo, "Initializing server %v...\n", me)
 	rf.readPersist(persister.ReadRaftState())
-
+	//fmt.Printf("make being called for server %v \n", me)
 	// start ticker goroutine to start elections
 	go rf.ticker()
 
 	// start goroutine to send logs through applyCh
-	go rf.sendLogsThroughApplyCh(applyCh)
+	go rf.sendLogsThroughApplyCh()
 	return rf
 }
