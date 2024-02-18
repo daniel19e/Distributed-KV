@@ -21,7 +21,6 @@ import (
 	//	"bytes"
 
 	"bytes"
-	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -141,8 +140,6 @@ func (rf *Raft) GetState() (int, bool) {
 // after you've implemented snapshots, pass the current snapshot
 // (or nil if there's not yet a snapshot).
 func (rf *Raft) persist() {
-	//fmt.Printf("calling persist, rf.lastIncludedIndex: %v, rf.lastIncludedTerm: %v, rf.tempLastIncludedIndex: %v, rf.tempLastIncludedTerm: %v\n",
-	//	rf.lastIncludedIndex, rf.lastIncludedTerm, rf.tempLastIncludedIndex, rf.tempLastIncludedTerm)
 	w := new(bytes.Buffer)
 	e := labgob.NewEncoder(w)
 	if e.Encode(rf.currentTerm) != nil {
@@ -161,7 +158,6 @@ func (rf *Raft) persist() {
 		BetterDebug(dError, "Error encoding rf.lastIncludedTerm. %v\n", rf.lastIncludedTerm)
 	}
 	raftstate := w.Bytes()
-	//fmt.Printf("rf.snapshot %v and currently stored snapshot %v\n", rf.snapshot, rf.persister.snapshot)
 	if rf.snapshot == nil && rf.persister.snapshot != nil {
 		rf.snapshot = rf.persister.snapshot
 	}
@@ -195,7 +191,6 @@ func (rf *Raft) readPersist(data []byte) {
 		rf.log = log
 		rf.lastIncludedIndex = lastIncludedIndex
 		rf.lastIncludedTerm = lastIncludedTerm
-		//fmt.Printf("server %v readPersist: lastIncludedIndex: %v, lastIncludedTerm: %v\n", rf.me, lastIncludedIndex, lastIncludedTerm)
 	}
 }
 
@@ -602,7 +597,6 @@ func (rf *Raft) sendLogsThroughApplyCh() {
 		rf.mu.Unlock()
 		// send all messages in the batch through channel
 		for _, message := range messages {
-			//	fmt.Printf("Server %v sending message %v\n", rf.me, message)
 			rf.applyCh <- message
 		}
 		time.Sleep(time.Duration(30) * time.Millisecond)
@@ -621,7 +615,6 @@ func (rf *Raft) sendLogsThroughApplyCh() {
 // for any long-running work.
 func Make(peers []*labrpc.ClientEnd, me int,
 	persister *Persister, applyCh chan ApplyMsg) *Raft {
-	fmt.Printf("make being called for server %v \n", me)
 	rf := &Raft{}
 	rf.peers = peers
 	rf.persister = persister
@@ -646,7 +639,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// initialize from state persisted before a crash
 	BetterDebug(dInfo, "Initializing server %v...\n", me)
 	rf.readPersist(persister.ReadRaftState())
-	//fmt.Printf("make being called for server %v \n", me)
 	// start ticker goroutine to start elections
 	go rf.ticker()
 

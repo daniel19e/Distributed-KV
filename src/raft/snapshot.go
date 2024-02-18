@@ -41,8 +41,6 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	if rf.lastApplied < args.LastIncludedIndex {
 		rf.lastApplied = args.LastIncludedIndex
 	}
-	//rf.commitIndex = args.LastIncludedIndex
-	//rf.lastApplied = args.LastIncludedIndex
 
 	rf.leaderId = args.LeaderId
 	rf.tempLastIncludedIndex = args.LastIncludedIndex
