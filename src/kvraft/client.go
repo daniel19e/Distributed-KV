@@ -9,8 +9,7 @@ import (
 )
 
 type Clerk struct {
-	servers []*labrpc.ClientEnd
-	// You will have to modify this struct.
+	servers  []*labrpc.ClientEnd
 	clientId int64
 	leaderId int64 // keep track of current leader
 	reqId    int64
@@ -27,7 +26,6 @@ func nrand() int64 {
 func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
-	// You'll have to add code here.
 	ck.clientId = nrand()
 	ck.leaderId = 0
 	ck.reqId = 0
@@ -43,60 +41,65 @@ func (ck *Clerk) updateLeaderId(leader int64) {
 // fetch the current value for a key.
 // returns "" if the key does not exist.
 // keeps trying forever in the face of all other errors.
-//
-// you can send an RPC with code like this:
-// ok := ck.servers[i].Call("KVServer.Get", &args, &reply)
-//
 // the types of args and reply (including whether they are pointers)
 // must match the declared types of the RPC handler function's
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) Get(key string) string {
-
+	DPrintf("Clerk(%d) - req(%d) get %s\n", ck.clientId, ck.reqId, key)
 	// atomically update leader and reqId, then call Get RPC
 	ck.mu.Lock()
 	ck.reqId++
 	leader := ck.leaderId
-	args := GetArgs{Key: key, ClientId: ck.clientId, ReqId: ck.reqId}
+	reqId := ck.reqId
 	ck.mu.Unlock()
+	args := GetArgs{
+		Key:      key,
+		ClientId: ck.clientId,
+		ReqId:    reqId,
+	}
 
+	// retry indefinitely until get a valid reply
 	val := ""
 	for {
 		reply := GetReply{}
-		ok := ck.servers[0].Call("KVServer.Get", &args, &reply)
+		ok := ck.servers[leader].Call("KVServer.Get", &args, &reply)
 		if ok && reply.Err != ErrWrongLeader {
 			if reply.Err == OK {
+				DPrintf("updating return val\n")
 				val = reply.Value
 			}
 			break
 		}
 		leader = (leader + 1) % int64(len(ck.servers))
 	}
-
 	ck.updateLeaderId(leader)
-
+	DPrintf("get return val = %s\n", val)
 	return val
 }
 
 // shared by Put and Append.
-//
-// you can send an RPC with code like this:
-// ok := ck.servers[i].Call("KVServer.PutAppend", &args, &reply)
-//
 // the types of args and reply (including whether they are pointers)
 // must match the declared types of the RPC handler function's
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) PutAppend(key string, value string, op string) {
-
+	DPrintf("Clerk(%d) - req(%d) putappend %s %s\n", ck.clientId, ck.reqId, key, value)
 	// atomically update leader and reqId, then call PutAppend RPC
 	ck.mu.Lock()
-	leader := ck.leaderId
 	ck.reqId++
-	args := PutAppendArgs{Key: key, Value: value, Op: op, ClientId: ck.clientId, ReqId: ck.reqId}
+	leader := ck.leaderId
+	reqId := ck.reqId
 	ck.mu.Unlock()
-
+	args := PutAppendArgs{
+		Key:      key,
+		Value:    value,
+		Op:       op,
+		ClientId: ck.clientId,
+		ReqId:    reqId,
+	}
+	// retry indefinitely until get a valid reply
 	for {
 		reply := PutAppendReply{}
-		ok := ck.servers[0].Call("KVServer.PutAppend", &args, &reply)
+		ok := ck.servers[leader].Call("KVServer.PutAppend", &args, &reply)
 		if ok && reply.Err != ErrWrongLeader {
 			break
 		}

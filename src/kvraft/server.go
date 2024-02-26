@@ -4,6 +4,7 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"6.5840/labgob"
 	"6.5840/labrpc"
@@ -20,38 +21,89 @@ func DPrintf(format string, a ...interface{}) (n int, err error) {
 }
 
 type Op struct {
-	Type  string
-	Key   string
-	Value string
-
+	Type     string
+	Key      string
+	Value    string
 	ClientId int64
 	ReqId    int64
 }
 
 type KVServer struct {
-	mu      sync.Mutex
-	me      int
-	rf      *raft.Raft
-	applyCh chan raft.ApplyMsg
-	dead    int32 // set by Kill()
-
-	maxraftstate int // snapshot if log grows this big
-
-	// Your definitions here.
-	kvMap map[string]string
+	mu           sync.Mutex
+	me           int
+	rf           *raft.Raft
+	applyCh      chan raft.ApplyMsg
+	dead         int32 // set by Kill()
+	maxraftstate int   // snapshot if log grows this big
+	kvMap        map[string]string
+	duplicateMap map[int64]int64 // map client id to req id
+	waitMap      map[int]chan Op
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
-	// Your code here.
-	kv.mu.Lock()
-	defer kv.mu.Unlock()
-	op := Op{}
-	msg := raft.ApplyMsg{CommandValid: true, Command: op}
-	kv.applyCh <- msg
+	op := Op{
+		Type:     "Get",
+		Key:      args.Key,
+		Value:    "",
+		ClientId: args.ClientId,
+		ReqId:    args.ReqId,
+	}
+
+	index, _, isLeader := kv.rf.Start(op)
+
+	if !isLeader {
+		reply.Err = ErrWrongLeader
+		return
+	} else {
+		select {
+		case op := <-kv.getOrCreateOpChannel(index /*atomic=*/, true):
+			if op.ClientId == args.ClientId && op.ReqId == args.ReqId {
+				reply.Value = func() string {
+					kv.mu.Lock()
+					defer kv.mu.Unlock()
+					val, exists := kv.kvMap[op.Key]
+					if exists {
+						reply.Err = OK
+						return val
+					} else {
+						reply.Err = ErrNoKey
+						return ""
+					}
+				}()
+			} else {
+				reply.Err = ErrWrongLeader
+			}
+		case <-time.After(600 * time.Millisecond):
+			reply.Err = ErrWrongLeader
+		}
+	}
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
-	// Your code here.
+	op := Op{
+		Type:     args.Op,
+		Key:      args.Key,
+		Value:    args.Value,
+		ClientId: args.ClientId,
+		ReqId:    args.ReqId}
+
+	index, _, isLeader := kv.rf.Start(op)
+
+	if !isLeader {
+		reply.Err = ErrWrongLeader
+		return
+	} else {
+		select {
+		case op := <-kv.getOrCreateOpChannel(index /*atomic=*/, true):
+			if op.ClientId == args.ClientId && op.ReqId == args.ReqId {
+				reply.Err = OK
+			} else {
+				reply.Err = ErrWrongLeader
+			}
+		case <-time.After(600 * time.Millisecond):
+			reply.Err = ErrWrongLeader
+		}
+	}
 }
 
 // the tester calls Kill() when a KVServer instance won't
@@ -65,12 +117,52 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 func (kv *KVServer) Kill() {
 	atomic.StoreInt32(&kv.dead, 1)
 	kv.rf.Kill()
-	// Your code here, if desired.
 }
 
 func (kv *KVServer) killed() bool {
 	z := atomic.LoadInt32(&kv.dead)
 	return z == 1
+}
+
+func (kv *KVServer) getOrCreateOpChannel(index int, atomic bool) chan Op {
+	if atomic {
+		kv.mu.Lock()
+		defer kv.mu.Unlock()
+	}
+	ch, exists := kv.waitMap[index]
+	if !exists {
+		ch = make(chan Op, 1)
+		kv.waitMap[index] = ch
+	}
+	return ch
+}
+
+func (kv *KVServer) applier() {
+	for !kv.killed() {
+		msg := <-kv.applyCh
+		if !msg.CommandValid {
+			continue
+		}
+		idx := msg.CommandIndex
+		kv.mu.Lock()
+		op := msg.Command.(Op)
+		reqId, exists := kv.duplicateMap[op.ClientId]
+		if !exists || reqId < op.ReqId {
+			switch op.Type {
+			case "Put":
+				kv.kvMap[op.Key] = op.Value
+			case "Append":
+				kv.kvMap[op.Key] += op.Value
+			case "Get":
+				// no need to update anything
+			}
+			// update dedupMap with last req id
+			kv.duplicateMap[op.ClientId] = op.ReqId
+		}
+		// lock is already held, so no need to do this atomically
+		kv.getOrCreateOpChannel(idx /*atomic=*/, false) <- op
+		kv.mu.Unlock()
+	}
 }
 
 // servers[] contains the ports of the set of
@@ -94,13 +186,13 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.me = me
 	kv.maxraftstate = maxraftstate
 
-	// You may need initialization code here.
-
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 
-	// You may need initialization code here.
 	kv.kvMap = make(map[string]string)
+	kv.duplicateMap = make(map[int64]int64)
+	kv.waitMap = make(map[int]chan Op)
 
+	go kv.applier()
 	return kv
 }
