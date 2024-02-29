@@ -192,7 +192,7 @@ func (kv *KVServer) commandApplier() {
 				case "Get":
 					// no need to update anything
 				}
-				// update dedupMap with last req id
+				// update duplicateMap with last req id
 				kv.duplicateMap[op.ClientId] = op.ReqId
 				kv.lastSnapshotIndex = idx
 			}
