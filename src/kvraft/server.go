@@ -1,6 +1,7 @@
 package kvraft
 
 import (
+	"bytes"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -35,9 +36,11 @@ type KVServer struct {
 	applyCh      chan raft.ApplyMsg
 	dead         int32 // set by Kill()
 	maxraftstate int   // snapshot if log grows this big
-	kvMap        map[string]string
-	duplicateMap map[int64]int64 // map client id to req id
 	waitMap      map[int]chan Op
+
+	kvMap             map[string]string // key value storage
+	duplicateMap      map[int64]int64   // map client id to req id
+	lastSnapshotIndex int
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
@@ -73,7 +76,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 			} else {
 				reply.Err = ErrWrongLeader
 			}
-		case <-time.After(600 * time.Millisecond):
+		case <-time.After(500 * time.Millisecond):
 			reply.Err = ErrWrongLeader
 		}
 	}
@@ -100,7 +103,7 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 			} else {
 				reply.Err = ErrWrongLeader
 			}
-		case <-time.After(600 * time.Millisecond):
+		case <-time.After(500 * time.Millisecond):
 			reply.Err = ErrWrongLeader
 		}
 	}
@@ -137,34 +140,6 @@ func (kv *KVServer) getOrCreateOpChannel(index int, atomic bool) chan Op {
 	return ch
 }
 
-func (kv *KVServer) applier() {
-	for !kv.killed() {
-		msg := <-kv.applyCh
-		if !msg.CommandValid {
-			continue
-		}
-		idx := msg.CommandIndex
-		kv.mu.Lock()
-		op := msg.Command.(Op)
-		reqId, exists := kv.duplicateMap[op.ClientId]
-		if !exists || reqId < op.ReqId {
-			switch op.Type {
-			case "Put":
-				kv.kvMap[op.Key] = op.Value
-			case "Append":
-				kv.kvMap[op.Key] += op.Value
-			case "Get":
-				// no need to update anything
-			}
-			// update dedupMap with last req id
-			kv.duplicateMap[op.ClientId] = op.ReqId
-		}
-		// lock is already held, so no need to do this atomically
-		kv.getOrCreateOpChannel(idx /*atomic=*/, false) <- op
-		kv.mu.Unlock()
-	}
-}
-
 // servers[] contains the ports of the set of
 // servers that will cooperate via Raft to
 // form the fault-tolerant key/value service.
@@ -188,11 +163,85 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
-
+	kv.lastSnapshotIndex = 0
 	kv.kvMap = make(map[string]string)
 	kv.duplicateMap = make(map[int64]int64)
 	kv.waitMap = make(map[int]chan Op)
 
-	go kv.applier()
+	kv.readSnapshot(persister.ReadSnapshot())
+	go kv.snapshotApplier(persister, maxraftstate)
+	go kv.commandApplier()
+
 	return kv
+}
+
+func (kv *KVServer) commandApplier() {
+	for !kv.killed() {
+		msg := <-kv.applyCh
+		if msg.CommandValid {
+			idx := msg.CommandIndex
+			kv.mu.Lock()
+			op := msg.Command.(Op)
+			reqId, exists := kv.duplicateMap[op.ClientId]
+			if !exists || reqId < op.ReqId {
+				switch op.Type {
+				case "Put":
+					kv.kvMap[op.Key] = op.Value
+				case "Append":
+					kv.kvMap[op.Key] += op.Value
+				case "Get":
+					// no need to update anything
+				}
+				// update dedupMap with last req id
+				kv.duplicateMap[op.ClientId] = op.ReqId
+				kv.lastSnapshotIndex = idx
+			}
+			// lock is already held, so no need to do this atomically
+			kv.getOrCreateOpChannel(idx /*atomic=*/, false) <- op
+			kv.mu.Unlock()
+		} else if msg.SnapshotValid {
+			kv.mu.Lock()
+			if msg.SnapshotIndex <= kv.lastSnapshotIndex {
+				kv.mu.Unlock()
+				continue
+			}
+			kv.readSnapshot(msg.Snapshot)
+			kv.lastSnapshotIndex = msg.SnapshotIndex
+			kv.mu.Unlock()
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+func (kv *KVServer) snapshotApplier(persister *raft.Persister, maxraftstate int) {
+	if maxraftstate == -1 {
+		// no need to take snapshot
+		return
+	}
+	for !kv.killed() {
+		kv.mu.Lock()
+		size := persister.RaftStateSize()
+		if size > maxraftstate {
+			w := new(bytes.Buffer)
+			e := labgob.NewEncoder(w)
+			e.Encode(kv.kvMap)
+			e.Encode(kv.duplicateMap)
+			e.Encode(kv.lastSnapshotIndex)
+			data := w.Bytes()
+			kv.rf.Snapshot(kv.lastSnapshotIndex, data)
+			kv.mu.Unlock()
+		} else {
+			kv.mu.Unlock()
+		}
+		time.Sleep(time.Duration(100) * time.Millisecond)
+	}
+}
+func (kv *KVServer) readSnapshot(snapshot []byte) {
+	if snapshot == nil || len(snapshot) < 1 {
+		return
+	}
+	r := bytes.NewBuffer(snapshot)
+	d := labgob.NewDecoder(r)
+	d.Decode(&kv.kvMap)
+	d.Decode(&kv.duplicateMap)
+	d.Decode(&kv.lastSnapshotIndex)
 }
