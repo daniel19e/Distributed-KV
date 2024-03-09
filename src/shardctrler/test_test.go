@@ -11,6 +11,8 @@ import (
 
 func check(t *testing.T, groups []int, ck *Clerk) {
 	c := ck.Query(-1)
+	fmt.Printf("query result in check (called with groups %v) is %v\n", groups, c)
+
 	if len(c.Groups) != len(groups) {
 		t.Fatalf("wanted %v groups, got %v", len(groups), len(c.Groups))
 	}
@@ -22,10 +24,10 @@ func check(t *testing.T, groups []int, ck *Clerk) {
 			t.Fatalf("missing group %v", g)
 		}
 	}
-
 	// any un-allocated shards?
 	if len(groups) > 0 {
 		for s, g := range c.Shards {
+			//	fmt.Printf("shard %v -> group %v\n", s, g)
 			_, ok := c.Groups[g]
 			if ok == false {
 				t.Fatalf("shard %v -> invalid group %v", s, g)
@@ -89,9 +91,7 @@ func TestBasic(t *testing.T) {
 
 	cfa := make([]Config, 6)
 	cfa[0] = ck.Query(-1)
-
 	check(t, []int{}, ck)
-
 	var gid1 int = 1
 	ck.Join(map[int][]string{gid1: []string{"x", "y", "z"}})
 	check(t, []int{gid1}, ck)
