@@ -11,7 +11,6 @@ import (
 
 func check(t *testing.T, groups []int, ck *Clerk) {
 	c := ck.Query(-1)
-	fmt.Printf("query result in check (called with groups %v) is %v\n", groups, c)
 
 	if len(c.Groups) != len(groups) {
 		t.Fatalf("wanted %v groups, got %v", len(groups), len(c.Groups))

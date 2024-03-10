@@ -11,7 +11,7 @@ import (
 	"6.5840/raft"
 )
 
-var Debug = true
+var Debug = false
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
 	if Debug {
@@ -174,7 +174,7 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 				return
 			}
 		case <-time.After(500 * time.Millisecond):
-			reply.WrongLeader = false
+			reply.WrongLeader = true
 			return
 		}
 	}
@@ -194,117 +194,83 @@ func (sc *ShardCtrler) Raft() *raft.Raft {
 	return sc.rf
 }
 
-func (sc *ShardCtrler) balancedShards(prevConfig Config, gidToShard map[int]int) [NShards]int {
-	len := len(gidToShard)
-	avg := NShards / len
-	rem := NShards % len
-	sorted := make([]int, 0)
-	for k := range gidToShard {
-		sorted = append(sorted, k)
-	}
-	sort.Ints(sorted)
-	DPrintf("gidToShard is %v, sorted is %v\n", gidToShard, sorted)
-	for i := 0; i < len; i++ {
-		res := avg
-		sortedGid := sorted[i]
-		//	DPrintf("res is %v, rem is %v, gidToShard[sorted[i]] is %v, sortedGid is %v\n", res, rem, gidToShard[sorted[i]], sortedGid)
-		if i < rem {
-			res++
-		}
-		if res < gidToShard[sorted[i]] {
-			newNum := gidToShard[sortedGid] - res
-			for shard, gid := range prevConfig.Shards {
-				if newNum <= 0 {
-					break
-				}
-				if gid == sortedGid {
-					prevConfig.Shards[shard] = 0
-					newNum--
-				}
-			}
-		}
-		if res > gidToShard[sorted[i]] {
-			newNum := res - gidToShard[sortedGid]
-			for shard, gid := range prevConfig.Shards {
-				if newNum <= 0 {
-					break
-				}
-				if gid == 0 {
-					prevConfig.Shards[shard] = sortedGid
-					newNum--
-				}
-			}
+func intInSlice(a int, list []int) bool {
+	for _, b := range list {
+		if b == a {
+			return true
 		}
 	}
+	return false
+}
 
-	DPrintf("prevConfig shards is %v\n", prevConfig.Shards)
-	return prevConfig.Shards
+func (sc *ShardCtrler) rebalanceShardAssignment() {
+	last := &sc.configs[len(sc.configs)-1]
+	if len(last.Groups) == 0 {
+		for i := range last.Shards {
+			last.Shards[i] = 0 //invalid
+		}
+		return
+	}
+	gids := make([]int, len(last.Groups))
+	i := 0
+	for k := range last.Groups {
+		gids[i] = k
+		i++
+	}
+	sort.Ints(gids)
+	DPrintf("gids is %v\n", gids)
+	ngroups := len(last.Groups)
+	avg := NShards / ngroups
+	//rem := NShards % ngroups
+	for idx, gid := range gids {
+		for j := 0; j < avg; j++ {
+			last.Shards[idx*avg+j] = gid
+		}
+	}
+	DPrintf("shard assignment is %v\n", sc.configs[len(sc.configs)-1].Shards)
 }
 
 func (sc *ShardCtrler) join(servers map[int][]string) {
-	prevConfig := sc.configs[len(sc.configs)-1]
+	last := sc.configs[len(sc.configs)-1]
 	config := Config{
 		Num:    len(sc.configs),
 		Groups: make(map[int][]string),
-	}
-	for gid, server := range sc.configs[len(sc.configs)-1].Groups {
-		config.Groups[gid] = server
+		Shards: last.Shards,
 	}
 	for gid, server := range servers {
 		config.Groups[gid] = server
 	}
-	gidToShard := make(map[int]int)
-	for gid := range config.Groups {
-		gidToShard[gid] = 0
-	}
-	for _, gid := range prevConfig.Shards {
-		if gid != 0 {
-			gidToShard[gid]++
-		}
-	}
-	config.Shards = sc.balancedShards(prevConfig, gidToShard)
-	sc.configs = append(sc.configs, config)
-}
-func (sc *ShardCtrler) leave(gids []int) {
-	prevConfig := sc.configs[len(sc.configs)-1]
-	config := Config{
-		Num:    len(sc.configs),
-		Shards: [NShards]int{},
-		Groups: make(map[int][]string),
-	}
-	for gid, server := range prevConfig.Groups {
+	for gid, server := range last.Groups {
 		config.Groups[gid] = server
 	}
-	leaveGids := make(map[int]bool)
-	for _, gid := range gids {
-		leaveGids[gid] = true
+	sc.configs = append(sc.configs, config)
+	sc.rebalanceShardAssignment()
+}
+
+func (sc *ShardCtrler) leave(gids []int) {
+	last := sc.configs[len(sc.configs)-1]
+	config := Config{
+		Num:    len(sc.configs),
+		Shards: last.Shards,
+		Groups: make(map[int][]string),
 	}
-	for _, gid := range gids {
-		delete(config.Groups, gid)
-	}
-	gidsToShard := make(map[int]int)
-	for shard, gid := range prevConfig.Shards {
-		if gid != 0 {
-			if leaveGids[gid] {
-				prevConfig.Shards[shard] = 0
-			} else {
-				gidsToShard[gid]++
-			}
+	for gid, servers := range last.Groups {
+		if !intInSlice(gid, gids) {
+			config.Groups[gid] = servers
 		}
 	}
-	if len(config.Groups) != 0 {
-		config.Shards = sc.balancedShards(prevConfig, gidsToShard)
-	}
 	sc.configs = append(sc.configs, config)
+	sc.rebalanceShardAssignment()
 }
 
 func (sc *ShardCtrler) move(shard int, gid int) {
+	last := sc.configs[len(sc.configs)-1]
 	config := Config{
 		Num:    len(sc.configs),
-		Shards: sc.configs[len(sc.configs)-1].Shards,
+		Shards: last.Shards,
 		Groups: make(map[int][]string),
 	}
-	for key, value := range sc.configs[len(sc.configs)-1].Groups {
+	for key, value := range last.Groups {
 		config.Groups[key] = value
 	}
 	config.Shards[shard] = gid
