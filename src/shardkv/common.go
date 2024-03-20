@@ -43,3 +43,8 @@ type GetReply struct {
 	Err   Err
 	Value string
 }
+
+type UpdateShardsArgs struct {
+}
+type UpdateShardsReply struct {
+}

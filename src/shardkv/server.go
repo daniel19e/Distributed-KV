@@ -12,7 +12,7 @@ import (
 	"6.5840/shardctrler"
 )
 
-const Debug = 0
+const Debug = 1
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
 	if Debug > 0 {
@@ -47,10 +47,10 @@ type ShardKV struct {
 	waitMap           map[int]chan Op
 	duplicateMap      map[int64]int64
 	lastSnapshotIndex int
+	latestConfig      shardctrler.Config
 }
 
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
-	// Your code here.
 	op := Op{
 		Type:     "Get",
 		Key:      args.Key,
@@ -91,7 +91,6 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
 }
 
 func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
-	// Your code here.
 	op := Op{
 		Type:     args.Op,
 		Key:      args.Key,
@@ -188,8 +187,28 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.readSnapshot(persister.ReadSnapshot())
 	go kv.commandApplier()
 	go kv.snapshotApplier(persister, maxraftstate)
+	go kv.fetchLatestConfig()
 
 	return kv
+}
+func (kv *ShardKV) UpdateShards(args *UpdateShardsArgs, reply *UpdateShardsReply) {
+	// TODO
+}
+
+func (kv *ShardKV) sendUpdateShards(server int) {
+}
+
+func (kv *ShardKV) fetchLatestConfig() {
+	for {
+		latest := kv.sctrler.Query(-1)
+		if latest.Num != kv.latestConfig.Num {
+			kv.mu.Lock()
+			kv.latestConfig = latest
+			DPrintf("latest config: %v", latest)
+			kv.mu.Unlock()
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func (kv *ShardKV) commandApplier() {
