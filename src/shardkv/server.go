@@ -29,6 +29,12 @@ type Op struct {
 	Value    string
 	ClientId int64
 	ReqId    int64
+	Config   shardctrler.Config
+}
+
+type Shard struct {
+	KVStorage    map[string]string
+	DuplicateMap map[int64]int64
 }
 
 type ShardKV struct {
@@ -42,15 +48,20 @@ type ShardKV struct {
 	maxraftstate int // snapshot if log grows this big
 
 	// Your definitions here.
-	sctrler           *shardctrler.Clerk
-	kvMap             map[string]string
-	waitMap           map[int]chan Op
-	duplicateMap      map[int64]int64
+	sctrler  *shardctrler.Clerk
+	shardMap map[int]*Shard
+	waitMap  map[int]chan Op
+	//	duplicateMap      map[int64]int64
 	lastSnapshotIndex int
-	latestConfig      shardctrler.Config
+	lastConfig        shardctrler.Config
+	curConfig         shardctrler.Config
 }
 
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
+	if kv.groupNotResponsible(args.Key) {
+		reply.Err = ErrWrongGroup
+		return
+	}
 	op := Op{
 		Type:     "Get",
 		Key:      args.Key,
@@ -59,7 +70,7 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
 		ReqId:    args.ReqId,
 	}
 	index, _, isLeader := kv.rf.Start(op)
-
+	DPrintf("GET SUBMITTED OP %v", op)
 	if !isLeader {
 		reply.Err = ErrWrongLeader
 		return
@@ -71,7 +82,7 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
 				reply.Value = func() string {
 					kv.mu.Lock()
 					defer kv.mu.Unlock()
-					val, exists := kv.kvMap[op.Key]
+					val, exists := kv.shardMap[key2shard(op.Key)].KVStorage[op.Key]
 					if exists {
 						reply.Err = OK
 						return val
@@ -91,6 +102,10 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
 }
 
 func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
+	if kv.groupNotResponsible(args.Key) {
+		reply.Err = ErrWrongGroup
+		return
+	}
 	op := Op{
 		Type:     args.Op,
 		Key:      args.Key,
@@ -116,6 +131,16 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	}
 }
 
+func (kv *ShardKV) UpdateShards(args *UpdateShardsArgs, reply *UpdateShardsReply) {
+	// TODO
+}
+
+func (kv *ShardKV) sendUpdateShards(server string) {
+	args := UpdateShardsArgs{}
+	reply := UpdateShardsReply{}
+	kv.make_end(server).Call("ShardKV.UpdateShards", args, reply)
+}
+
 // the tester calls Kill() when a ShardKV instance won't
 // be needed again. you are not required to do anything
 // in Kill(), but it might be convenient to (for example)
@@ -136,6 +161,14 @@ func (kv *ShardKV) getOrCreateOpChannel(index int, atomic bool) chan Op {
 	}
 	return ch
 
+}
+
+func (kv *ShardKV) groupNotResponsible(key string) bool {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	config := kv.lastConfig
+	shard := key2shard(key)
+	return config.Shards[shard] != kv.gid
 }
 
 // servers[] contains the ports of the servers in this group.
@@ -175,14 +208,19 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.make_end = make_end
 	kv.gid = gid
 	kv.ctrlers = ctrlers
-
+	DPrintf("server %d start, gid %d", me, gid)
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 	kv.sctrler = shardctrler.MakeClerk(kv.ctrlers)
-	kv.kvMap = make(map[string]string)
-	kv.duplicateMap = make(map[int64]int64)
+	//	kv.duplicateMap = make(map[int64]int64)
 	kv.waitMap = make(map[int]chan Op)
+	kv.lastConfig = shardctrler.Config{}
+	kv.curConfig = shardctrler.Config{}
 	kv.lastSnapshotIndex = 0
+	kv.shardMap = map[int]*Shard{}
+	for i := 0; i < shardctrler.NShards; i++ {
+		kv.shardMap[i] = &Shard{KVStorage: make(map[string]string), DuplicateMap: make(map[int64]int64)}
+	}
 
 	kv.readSnapshot(persister.ReadSnapshot())
 	go kv.commandApplier()
@@ -191,23 +229,31 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 
 	return kv
 }
-func (kv *ShardKV) UpdateShards(args *UpdateShardsArgs, reply *UpdateShardsReply) {
-	// TODO
-}
-
-func (kv *ShardKV) sendUpdateShards(server int) {
-}
 
 func (kv *ShardKV) fetchLatestConfig() {
 	for {
-		latest := kv.sctrler.Query(-1)
-		if latest.Num != kv.latestConfig.Num {
-			kv.mu.Lock()
-			kv.latestConfig = latest
-			DPrintf("latest config: %v", latest)
-			kv.mu.Unlock()
+		kv.mu.Lock()
+		latestConfigFromCtrl := kv.sctrler.Query(-1)
+		latestStoredNum := kv.lastConfig.Num
+		//	DPrintf("SERVER %d: queried: %v, stored: %v", kv.me, latestConfigFromCtrl.Num, latestStoredNum)
+		kv.mu.Unlock()
+		if latestConfigFromCtrl.Num != latestStoredNum {
+			op := Op{
+				Type:   "Config",
+				Config: latestConfigFromCtrl,
+			}
+			index, _, isLeader := kv.rf.Start(op)
+			if isLeader {
+				ch := kv.getOrCreateOpChannel(index /*atomic=*/, true)
+				select {
+				case <-ch:
+					close(ch)
+				case <-time.After(500 * time.Millisecond):
+					// do nothing upon leader change
+				}
+			}
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
@@ -218,20 +264,35 @@ func (kv *ShardKV) commandApplier() {
 			idx := msg.CommandIndex
 			kv.mu.Lock()
 			op := msg.Command.(Op)
-			reqId, exists := kv.duplicateMap[op.ClientId]
-			if !exists || reqId < op.ReqId {
-				switch op.Type {
-				case "Put":
-					kv.kvMap[op.Key] = op.Value
-				case "Append":
-					kv.kvMap[op.Key] += op.Value
-				case "Get":
-					// no need to update anything
+			//	reqId, exists := kv.duplicateMap[op.ClientId]
+			//	if !exists || reqId < op.ReqId {
+			switch op.Type {
+			case "Config":
+				// update latest config
+				DPrintf("SERVER %d: updating config %v to %v", kv.me, kv.lastConfig, op.Config)
+				kv.lastConfig = op.Config
+			case "Put":
+				// create new value
+				shard := key2shard(op.Key)
+				reqId, exists := kv.shardMap[shard].DuplicateMap[op.ClientId]
+				if !exists || reqId < op.ReqId {
+					kv.shardMap[shard].KVStorage[op.Key] = op.Value
 				}
-				// update duplicateMap with last req id
-				kv.duplicateMap[op.ClientId] = op.ReqId
-				kv.lastSnapshotIndex = idx
+			case "Append":
+				// append to existing value
+				shard := key2shard(op.Key)
+				reqId, exists := kv.shardMap[shard].DuplicateMap[op.ClientId]
+				if !exists || reqId < op.ReqId {
+					kv.shardMap[key2shard(op.Key)].KVStorage[op.Key] += op.Value
+
+				}
+			case "Get":
+				// no need to update anything
 			}
+			// update duplicateMap with last req id
+			//	kv.duplicateMap[op.ClientId] = op.ReqId
+			kv.lastSnapshotIndex = idx
+			//}
 			// lock is already held, so no need to do this atomically
 			kv.getOrCreateOpChannel(idx /*atomic=*/, false) <- op
 			kv.mu.Unlock()
@@ -261,8 +322,8 @@ func (kv *ShardKV) snapshotApplier(persister *raft.Persister, maxraftstate int) 
 		if size > maxraftstate {
 			w := new(bytes.Buffer)
 			e := labgob.NewEncoder(w)
-			e.Encode(kv.kvMap)
-			e.Encode(kv.duplicateMap)
+			e.Encode(kv.shardMap)
+			//	e.Encode(kv.duplicateMap)
 			e.Encode(kv.lastSnapshotIndex)
 			data := w.Bytes()
 			kv.rf.Snapshot(kv.lastSnapshotIndex, data)
@@ -279,7 +340,7 @@ func (kv *ShardKV) readSnapshot(snapshot []byte) {
 	}
 	r := bytes.NewBuffer(snapshot)
 	d := labgob.NewDecoder(r)
-	d.Decode(&kv.kvMap)
-	d.Decode(&kv.duplicateMap)
+	d.Decode(&kv.shardMap)
+	//	d.Decode(&kv.duplicateMap)
 	d.Decode(&kv.lastSnapshotIndex)
 }

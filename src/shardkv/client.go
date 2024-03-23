@@ -80,7 +80,7 @@ func (ck *Clerk) Get(key string) string {
 	args.ClientId = ck.clientId
 	args.ReqId = ck.reqId
 	ck.mu.Unlock()
-	DPrintf("GET: client %d req %d get %s", ck.clientId, ck.reqId, key)
+	DPrintf("GET: (client %d) (req %d) (get %s) (shard %d)", ck.clientId, ck.reqId, key, key2shard(key))
 	for {
 		shard := key2shard(key)
 		gid := ck.config.Shards[shard]
@@ -90,6 +90,7 @@ func (ck *Clerk) Get(key string) string {
 				srv := ck.make_end(servers[si])
 				var reply GetReply
 				ok := srv.Call("ShardKV.Get", &args, &reply)
+				DPrintf("get ok %v reply %v\n", ok, reply)
 				if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
 					return reply.Value
 				}
@@ -120,7 +121,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 	args.ClientId = ck.clientId
 	args.ReqId = ck.reqId
 	ck.mu.Unlock()
-	DPrintf("PUT: client %d req %d put %s %s", ck.clientId, ck.reqId, key, value)
+	DPrintf("PUT: (client %d) (req %d) (put %s:%s) (shard %d)", ck.clientId, ck.reqId, key, value, key2shard(key))
 	for {
 		shard := key2shard(key)
 		gid := ck.config.Shards[shard]
@@ -129,7 +130,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 				srv := ck.make_end(servers[si])
 				var reply PutAppendReply
 				ok := srv.Call("ShardKV.PutAppend", &args, &reply)
-				DPrintf("ok %v reply %v\n", ok, reply)
+				DPrintf("put ok %v reply %v\n", ok, reply)
 				if ok && reply.Err == OK {
 					return
 				}

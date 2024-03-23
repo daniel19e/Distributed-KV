@@ -1,5 +1,7 @@
 package shardkv
 
+import "6.5840/shardctrler"
+
 //
 // Sharded key/value server.
 // Lots of replica groups, each running Raft.
@@ -45,6 +47,8 @@ type GetReply struct {
 }
 
 type UpdateShardsArgs struct {
+	Shards       [shardctrler.NShards]int
+	DuplicateMap map[int64]int64
 }
 type UpdateShardsReply struct {
 }
