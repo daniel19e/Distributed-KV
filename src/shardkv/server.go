@@ -12,7 +12,7 @@ import (
 	"6.5840/shardctrler"
 )
 
-const Debug = 1
+const Debug = 0
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
 	if Debug > 0 {
@@ -47,18 +47,17 @@ type ShardKV struct {
 	ctrlers      []*labrpc.ClientEnd
 	maxraftstate int // snapshot if log grows this big
 
-	// Your definitions here.
 	sctrler  *shardctrler.Clerk
 	shardMap map[int]*Shard
 	waitMap  map[int]chan Op
 	//	duplicateMap      map[int64]int64
 	lastSnapshotIndex int
 	lastConfig        shardctrler.Config
-	curConfig         shardctrler.Config
+	currentConfig     shardctrler.Config
 }
 
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
-	if kv.groupNotResponsible(args.Key) {
+	if kv.isResponsibleFor(args.Key) {
 		reply.Err = ErrWrongGroup
 		return
 	}
@@ -70,7 +69,6 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
 		ReqId:    args.ReqId,
 	}
 	index, _, isLeader := kv.rf.Start(op)
-	DPrintf("GET SUBMITTED OP %v", op)
 	if !isLeader {
 		reply.Err = ErrWrongLeader
 		return
@@ -102,7 +100,7 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
 }
 
 func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
-	if kv.groupNotResponsible(args.Key) {
+	if !kv.isResponsibleFor(args.Key) {
 		reply.Err = ErrWrongGroup
 		return
 	}
@@ -163,81 +161,22 @@ func (kv *ShardKV) getOrCreateOpChannel(index int, atomic bool) chan Op {
 
 }
 
-func (kv *ShardKV) groupNotResponsible(key string) bool {
+func (kv *ShardKV) isResponsibleFor(key string) bool {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
-	config := kv.lastConfig
+	config := kv.currentConfig
 	shard := key2shard(key)
-	return config.Shards[shard] != kv.gid
-}
-
-// servers[] contains the ports of the servers in this group.
-//
-// me is the index of the current server in servers[].
-//
-// the k/v server should store snapshots through the underlying Raft
-// implementation, which should call persister.SaveStateAndSnapshot() to
-// atomically save the Raft state along with the snapshot.
-//
-// the k/v server should snapshot when Raft's saved state exceeds
-// maxraftstate bytes, in order to allow Raft to garbage-collect its
-// log. if maxraftstate is -1, you don't need to snapshot.
-//
-// gid is this group's GID, for interacting with the shardctrler.
-//
-// pass ctrlers[] to shardctrler.MakeClerk() so you can send
-// RPCs to the shardctrler.
-//
-// make_end(servername) turns a server name from a
-// Config.Groups[gid][i] into a labrpc.ClientEnd on which you can
-// send RPCs. You'll need this to send RPCs to other groups.
-//
-// look at client.go for examples of how to use ctrlers[]
-// and make_end() to send RPCs to the group owning a specific shard.
-//
-// StartServer() must return quickly, so it should start goroutines
-// for any long-running work.
-func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister, maxraftstate int, gid int, ctrlers []*labrpc.ClientEnd, make_end func(string) *labrpc.ClientEnd) *ShardKV {
-	// call labgob.Register on structures you want
-	// Go's RPC library to marshall/unmarshall.
-	labgob.Register(Op{})
-
-	kv := new(ShardKV)
-	kv.me = me
-	kv.maxraftstate = maxraftstate
-	kv.make_end = make_end
-	kv.gid = gid
-	kv.ctrlers = ctrlers
-	DPrintf("server %d start, gid %d", me, gid)
-	kv.applyCh = make(chan raft.ApplyMsg)
-	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
-	kv.sctrler = shardctrler.MakeClerk(kv.ctrlers)
-	//	kv.duplicateMap = make(map[int64]int64)
-	kv.waitMap = make(map[int]chan Op)
-	kv.lastConfig = shardctrler.Config{}
-	kv.curConfig = shardctrler.Config{}
-	kv.lastSnapshotIndex = 0
-	kv.shardMap = map[int]*Shard{}
-	for i := 0; i < shardctrler.NShards; i++ {
-		kv.shardMap[i] = &Shard{KVStorage: make(map[string]string), DuplicateMap: make(map[int64]int64)}
-	}
-
-	kv.readSnapshot(persister.ReadSnapshot())
-	go kv.commandApplier()
-	go kv.snapshotApplier(persister, maxraftstate)
-	go kv.fetchLatestConfig()
-
-	return kv
+	return config.Shards[shard] == kv.gid
 }
 
 func (kv *ShardKV) fetchLatestConfig() {
 	for {
 		kv.mu.Lock()
 		latestConfigFromCtrl := kv.sctrler.Query(-1)
-		latestStoredNum := kv.lastConfig.Num
+		currentStoredNum := kv.currentConfig.Num
 		//	DPrintf("SERVER %d: queried: %v, stored: %v", kv.me, latestConfigFromCtrl.Num, latestStoredNum)
 		kv.mu.Unlock()
-		if latestConfigFromCtrl.Num != latestStoredNum {
+		if latestConfigFromCtrl.Num != currentStoredNum {
 			op := Op{
 				Type:   "Config",
 				Config: latestConfigFromCtrl,
@@ -270,7 +209,8 @@ func (kv *ShardKV) commandApplier() {
 			case "Config":
 				// update latest config
 				DPrintf("SERVER %d: updating config %v to %v", kv.me, kv.lastConfig, op.Config)
-				kv.lastConfig = op.Config
+				kv.lastConfig = kv.currentConfig
+				kv.currentConfig = op.Config
 			case "Put":
 				// create new value
 				shard := key2shard(op.Key)
@@ -343,4 +283,63 @@ func (kv *ShardKV) readSnapshot(snapshot []byte) {
 	d.Decode(&kv.shardMap)
 	//	d.Decode(&kv.duplicateMap)
 	d.Decode(&kv.lastSnapshotIndex)
+}
+
+// servers[] contains the ports of the servers in this group.
+//
+// me is the index of the current server in servers[].
+//
+// the k/v server should store snapshots through the underlying Raft
+// implementation, which should call persister.SaveStateAndSnapshot() to
+// atomically save the Raft state along with the snapshot.
+//
+// the k/v server should snapshot when Raft's saved state exceeds
+// maxraftstate bytes, in order to allow Raft to garbage-collect its
+// log. if maxraftstate is -1, you don't need to snapshot.
+//
+// gid is this group's GID, for interacting with the shardctrler.
+//
+// pass ctrlers[] to shardctrler.MakeClerk() so you can send
+// RPCs to the shardctrler.
+//
+// make_end(servername) turns a server name from a
+// Config.Groups[gid][i] into a labrpc.ClientEnd on which you can
+// send RPCs. You'll need this to send RPCs to other groups.
+//
+// look at client.go for examples of how to use ctrlers[]
+// and make_end() to send RPCs to the group owning a specific shard.
+//
+// StartServer() must return quickly, so it should start goroutines
+// for any long-running work.
+func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister, maxraftstate int, gid int, ctrlers []*labrpc.ClientEnd, make_end func(string) *labrpc.ClientEnd) *ShardKV {
+	// call labgob.Register on structures you want
+	// Go's RPC library to marshall/unmarshall.
+	labgob.Register(Op{})
+
+	kv := new(ShardKV)
+	kv.me = me
+	kv.maxraftstate = maxraftstate
+	kv.make_end = make_end
+	kv.gid = gid
+	kv.ctrlers = ctrlers
+	DPrintf("server %d start, gid %d", me, gid)
+	kv.applyCh = make(chan raft.ApplyMsg)
+	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
+	kv.sctrler = shardctrler.MakeClerk(kv.ctrlers)
+	//	kv.duplicateMap = make(map[int64]int64)
+	kv.waitMap = make(map[int]chan Op)
+	kv.lastConfig = shardctrler.Config{}
+	kv.currentConfig = shardctrler.Config{}
+	kv.lastSnapshotIndex = 0
+	kv.shardMap = map[int]*Shard{}
+	for i := 0; i < shardctrler.NShards; i++ {
+		kv.shardMap[i] = &Shard{KVStorage: make(map[string]string), DuplicateMap: make(map[int64]int64)}
+	}
+
+	kv.readSnapshot(persister.ReadSnapshot())
+	go kv.commandApplier()
+	go kv.snapshotApplier(persister, maxraftstate)
+	go kv.fetchLatestConfig()
+
+	return kv
 }
