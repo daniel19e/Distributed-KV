@@ -1,15 +1,18 @@
 package shardkv
 
-import "6.5840/porcupine"
-import "6.5840/models"
-import "testing"
-import "strconv"
-import "time"
-import "fmt"
-import "sync/atomic"
-import "sync"
-import "math/rand"
-import "io/ioutil"
+import (
+	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"6.5840/models"
+	"6.5840/porcupine"
+)
 
 const linearizabilityCheckTimeout = 1 * time.Second
 
@@ -99,7 +102,7 @@ func TestJoinLeave(t *testing.T) {
 	defer cfg.cleanup()
 
 	ck := cfg.makeClient()
-
+	fmt.Print("JOIN 0\n")
 	cfg.join(0)
 
 	n := 10
@@ -113,18 +116,16 @@ func TestJoinLeave(t *testing.T) {
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
-
+	fmt.Print("JOIN 1\n")
 	cfg.join(1)
-
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(5)
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
-
+	fmt.Print("LEAVE 0\n")
 	cfg.leave(0)
-
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(5)
@@ -134,10 +135,9 @@ func TestJoinLeave(t *testing.T) {
 
 	// allow time for shards to transfer.
 	time.Sleep(1 * time.Second)
-
+	fmt.Print("CHECK LOGS\n")
 	cfg.checklogs()
 	cfg.ShutdownGroup(0)
-
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
