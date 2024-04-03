@@ -14,9 +14,7 @@ import (
 )
 
 type Clerk struct {
-	servers []*labrpc.ClientEnd
-	// Your data here.
-
+	servers  []*labrpc.ClientEnd
 	clientId int64
 	leaderId int64
 	reqId    int64
@@ -33,7 +31,6 @@ func nrand() int64 {
 func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
-	// Your code here.
 	ck.clientId = nrand()
 	ck.leaderId = 0
 	ck.reqId = 0

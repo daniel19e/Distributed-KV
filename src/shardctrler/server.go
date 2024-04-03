@@ -21,12 +21,10 @@ func DPrintf(format string, a ...interface{}) (n int, err error) {
 }
 
 type ShardCtrler struct {
-	mu      sync.Mutex
-	me      int
-	rf      *raft.Raft
-	applyCh chan raft.ApplyMsg
-
-	// Your data here.
+	mu                sync.Mutex
+	me                int
+	rf                *raft.Raft
+	applyCh           chan raft.ApplyMsg
 	configs           []Config // indexed by config num
 	duplicateMap      map[int64]int64
 	waitMap           map[int]chan Op
@@ -34,7 +32,6 @@ type ShardCtrler struct {
 }
 
 type Op struct {
-	// Your data here.
 	Type        string
 	ClientId    int64
 	ReqId       int64
@@ -118,7 +115,6 @@ func (sc *ShardCtrler) Leave(args *LeaveArgs, reply *LeaveReply) {
 }
 
 func (sc *ShardCtrler) Move(args *MoveArgs, reply *MoveReply) {
-	// Your code here.
 	op := Op{
 		Type:      "Move",
 		ClientId:  args.ClientId,
@@ -186,7 +182,6 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 // turn off debug output from this instance.
 func (sc *ShardCtrler) Kill() {
 	sc.rf.Kill()
-	// Your code here, if desired.
 }
 
 // needed by shardkv tester
@@ -329,7 +324,6 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 	sc.applyCh = make(chan raft.ApplyMsg)
 	sc.rf = raft.Make(servers, me, persister, sc.applyCh)
 
-	// Your code here.
 	sc.duplicateMap = make(map[int64]int64)
 	sc.waitMap = make(map[int]chan Op)
 	sc.lastSnapshotIndex = 0

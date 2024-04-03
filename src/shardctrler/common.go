@@ -14,8 +14,6 @@ package shardctrler
 // #0 is the initial configuration, with no groups and all shards
 // assigned to group 0 (the invalid group).
 //
-// You will need to add fields to the RPC argument structs.
-//
 
 // The number of shards.
 const NShards = 10
