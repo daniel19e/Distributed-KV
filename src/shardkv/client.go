@@ -90,7 +90,7 @@ func (ck *Clerk) Get(key string) string {
 				srv := ck.make_end(servers[si])
 				var reply GetReply
 				ok := srv.Call("ShardKV.Get", &args, &reply)
-				//	DPrintf("get ok %v reply %v\n", ok, reply)
+				//DPrintf("get ok %v reply %v\n", ok, reply)
 				if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
 					return reply.Value
 				}

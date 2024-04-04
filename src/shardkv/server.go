@@ -39,6 +39,7 @@ const (
 	Get          = "Get"
 	Config       = "Config"
 	UpdateShards = "UpdateShards"
+	RemoveShard  = "RemoveShard"
 )
 
 type OpType string
@@ -102,6 +103,13 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
 		ReqId:    args.ReqId,
 	}
 	reply.Value, reply.Err = kv.sendToRaft(op)
+	kv.mu.Lock()
+	if kv.currentConfig.Shards[key2shard(args.Key)] != kv.gid {
+		reply.Err = ErrWrongGroup
+	} else if kv.shardMap[key2shard(args.Key)].Storage == nil {
+		reply.Err = ErrNoKey
+	}
+	kv.mu.Unlock()
 }
 
 func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
@@ -109,8 +117,6 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 		reply.Err = ErrWrongGroup
 		return
 	}
-	//	fmt.Printf("PUTAPPEND %v\n", kv.printShardMapToString(kv.shardMap))
-
 	op := Op{
 		Type:     args.Op,
 		Key:      args.Key,
@@ -119,6 +125,13 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 		ReqId:    args.ReqId,
 	}
 	_, reply.Err = kv.sendToRaft(op)
+	kv.mu.Lock()
+	if kv.currentConfig.Shards[key2shard(args.Key)] != kv.gid {
+		reply.Err = ErrWrongGroup
+	} else if kv.shardMap[key2shard(args.Key)].Storage == nil {
+		reply.Err = ErrNoKey
+	}
+	kv.mu.Unlock()
 }
 
 func (kv *ShardKV) UpdateShards(args *UpdateShardsArgs, reply *UpdateShardsReply) {
@@ -197,6 +210,11 @@ func (kv *ShardKV) sendToRaft(op Op) (string, Err) {
 func (kv *ShardKV) fetchLatestConfig() {
 	for {
 		kv.mu.Lock()
+		if !kv.allReceived() {
+			kv.mu.Unlock()
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
 		currentConfig := kv.currentConfig
 		newConfig := kv.sctrler.Query(currentConfig.Num + 1)
 		kv.mu.Unlock()
@@ -270,11 +288,23 @@ func (kv *ShardKV) sendUpdatedShards() {
 						servers[i] = kv.make_end(serverNames[i])
 					}
 					go func(servers []*labrpc.ClientEnd, args *UpdateShardsArgs, reply *UpdateShardsReply) {
-						for _, srv := range servers {
-							ok := srv.Call("ShardKV.UpdateShards", args, reply)
-							if ok && reply.Err == OK {
+						index := 0
+						start := time.Now()
+						for {
+							ok := servers[index].Call("ShardKV.UpdateShards", args, reply)
+							if ok && reply.Err == OK || time.Since(start) > 5*time.Second {
+								kv.mu.Lock()
+								op := Op{
+									Type:     RemoveShard,
+									ClientId: int64(kv.gid),
+									ReqId:    int64(kv.currentConfig.Num),
+									ShardId:  args.ShardId,
+								}
+								kv.mu.Unlock()
+								kv.sendToRaft(op)
 								break
 							}
+							index = (index + 1) % len(servers)
 						}
 					}(servers, args, reply)
 				}
@@ -284,7 +314,64 @@ func (kv *ShardKV) sendUpdatedShards() {
 			continue
 		}
 		kv.mu.Unlock()
+		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+func (kv *ShardKV) applyConfig(op Op) {
+	// update latest config
+	if kv.currentConfig.Num >= op.Config.Num {
+		return // ignore outdated config
+	}
+	for shard, gid := range op.Config.Shards {
+		// if incoming shard is not currently owned by this group, create a new storage map
+		if gid == kv.gid && kv.currentConfig.Shards[shard] == 0 {
+			kv.shardMap[shard].Storage = make(map[string]string)
+			kv.shardMap[shard].ConfigNum = op.Config.Num
+		}
+	}
+	kv.lastConfig = kv.currentConfig
+	kv.currentConfig = op.Config
+	DPrintf("SERVER %d (gid %d): updating config %v to %v", kv.me, kv.gid, kv.currentConfig, op.Config)
+}
+
+func (kv *ShardKV) applyUpdateShards(op Op) {
+	if kv.shardMap[op.ShardId].Storage == nil || op.Shard.ConfigNum < kv.currentConfig.Num {
+		return
+	}
+	DPrintf("SERVER %d (gid %d): updating shard %d: %v", kv.me, kv.gid, op.ShardId, op.Shard)
+	shard := &Shard{
+		Storage:   make(map[string]string),
+		ConfigNum: op.Shard.ConfigNum,
+	}
+	for k, v := range op.Shard.Storage {
+		shard.Storage[k] = v
+	}
+	kv.shardMap[op.ShardId] = shard
+	// need to handle duplicate requests
+	for clientId, reqId := range op.DuplicateMap {
+		r, exists := kv.duplicateMap[clientId]
+		if !exists || r < reqId {
+			kv.duplicateMap[clientId] = reqId
+		}
+	}
+}
+
+func (kv *ShardKV) applyPutAppend(op Op) {
+	if kv.currentConfig.Shards[key2shard(op.Key)] != kv.gid || kv.shardMap[key2shard(op.Key)].Storage == nil {
+		return
+	}
+	shard := key2shard(op.Key)
+	reqId, exists := kv.duplicateMap[op.ClientId]
+	if !exists || reqId < op.ReqId {
+		DPrintf("SERVER %d (gid %d): appending %s:%s in shard %d", kv.me, kv.gid, op.Key, op.Value, shard)
+		if op.Type == Put {
+			kv.shardMap[shard].Storage[op.Key] = op.Value
+		} else if op.Type == Append {
+			kv.shardMap[shard].Storage[op.Key] += op.Value
+		}
+	}
+	kv.duplicateMap[op.ClientId] = op.ReqId
 }
 
 func (kv *ShardKV) commandApplier() {
@@ -294,75 +381,32 @@ func (kv *ShardKV) commandApplier() {
 			idx := msg.CommandIndex
 			kv.mu.Lock()
 			op := msg.Command.(Op)
-			//	reqId, exists := kv.duplicateMap[op.ClientId]
-			//	if !exists || reqId < op.ReqId {
 			switch op.Type {
 			case Config:
-				// update latest config
-				DPrintf("SERVER %d (gid %d): updating config %v to %v", kv.me, kv.gid, kv.currentConfig, op.Config)
-				if op.Config.Num != kv.currentConfig.Num+1 {
-					kv.mu.Unlock()
-					continue // ignore outdated config
-				}
-				for shard, gid := range op.Config.Shards {
-					// if incoming shard is not currently owned by this group, create a new storage map
-					if gid == kv.gid && kv.currentConfig.Shards[shard] == 0 {
-						kv.shardMap[shard].Storage = make(map[string]string)
-						kv.shardMap[shard].ConfigNum = op.Config.Num
-					}
-				}
-				kv.lastConfig = kv.currentConfig
-				kv.currentConfig = op.Config
+				kv.applyConfig(op)
 			case UpdateShards:
-				if kv.shardMap[op.ShardId].Storage == nil || op.Shard.ConfigNum < kv.currentConfig.Num {
+				kv.applyUpdateShards(op)
+			case RemoveShard:
+				if op.ReqId < int64(kv.currentConfig.Num) {
 					kv.mu.Unlock()
 					continue
 				}
-				DPrintf("SERVER %d (gid %d): updating shard %d: %v", kv.me, kv.gid, op.ShardId, op.Shard)
-				shard := &Shard{
-					Storage:   make(map[string]string),
-					ConfigNum: op.Config.Num,
-				}
-				for k, v := range op.Shard.Storage {
-					shard.Storage[k] = v
-				}
-				kv.shardMap[op.ShardId] = shard
-				// need to handle duplicate requests
-				for clientId, reqId := range op.DuplicateMap {
-					r, exists := kv.duplicateMap[clientId]
-					if !exists || r < reqId {
-						kv.duplicateMap[clientId] = reqId
-					}
-				}
+				kv.shardMap[op.ShardId].Storage = nil
+				kv.shardMap[op.ShardId].ConfigNum = op.Config.Num
 			case Put:
-				// create new value
-				shard := key2shard(op.Key)
-				reqId, exists := kv.duplicateMap[op.ClientId]
-				if !exists || reqId < op.ReqId {
-					DPrintf("SERVER %d (gid %d): putting %s:%s in shard %d", kv.me, kv.gid, op.Key, op.Value, shard)
-					kv.shardMap[shard].Storage[op.Key] = op.Value
-				}
+				kv.applyPutAppend(op)
 			case Append:
-				// append to existing value
-				shard := key2shard(op.Key)
-				reqId, exists := kv.duplicateMap[op.ClientId]
-				if !exists || reqId < op.ReqId {
-					DPrintf("SERVER %d (gid %d): appending %s:%s in shard %d", kv.me, kv.gid, op.Key, op.Value, shard)
-					kv.shardMap[shard].Storage[op.Key] += op.Value
-				}
+				kv.applyPutAppend(op)
 			case Get:
 				// no need to update anything
+				kv.duplicateMap[op.ClientId] = op.ReqId
 			default:
 				panic(fmt.Sprintf("invalid op type: %v", op.Type))
 			}
-			// update duplicateMap with last req id
-			kv.duplicateMap[op.ClientId] = op.ReqId
 			kv.lastSnapshotIndex = idx
-			// lock is already held, so no need to do this atomically
 			kv.getOrCreateOpChannel(idx /*atomic=*/, false) <- op
 			kv.mu.Unlock()
 		} else if msg.SnapshotValid {
-			// handle snapshots
 			kv.mu.Lock()
 			if msg.SnapshotIndex <= kv.lastSnapshotIndex {
 				kv.mu.Unlock()
