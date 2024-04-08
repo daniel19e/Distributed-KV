@@ -1,0 +1,164 @@
+Test: join then leave ...
+server 0 start, gid 100
+server 1 start, gid 100
+server 2 start, gid 100
+server 0 start, gid 101
+server 1 start, gid 101
+server 2 start, gid 101
+server 0 start, gid 102
+server 1 start, gid 102
+server 2 start, gid 102
+JOIN 0
+PUT: (client 1564761390942250874) (req 1) (put 0:5TRo4) (shard 8)
+SERVER 0 (gid 101): updating config {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]} to {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]}
+SERVER 0 (gid 102): updating config {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]} to {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]}
+SERVER 2 (gid 100): updating config {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]} to {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]}
+SERVER 2 (gid 101): updating config {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]} to {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]}
+SERVER 1 (gid 101): updating config {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]} to {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]}
+SERVER 1 (gid 100): updating config {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]} to {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]}
+SERVER 0 (gid 100): updating config {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]} to {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]}
+SERVER 2 (gid 102): updating config {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]} to {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]}
+SERVER 1 (gid 102): updating config {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]} to {1 [100 100 100 100 100 100 100 100 100 100] map[100:[server-100-0 server-100-1 server-100-2]]}
+SERVER 2 (gid 100): appending 0:5TRo4 in shard 8
+PUT: (client 1564761390942250874) (req 2) (put 1:RrnbJ) (shard 9)
+SERVER 0 (gid 100): appending 0:5TRo4 in shard 8
+SERVER 2 (gid 100): appending 1:RrnbJ in shard 9
+PUT: (client 1564761390942250874) (req 3) (put 2:yYACi) (shard 0)
+SERVER 1 (gid 100): appending 0:5TRo4 in shard 8
+SERVER 2 (gid 100): appending 2:yYACi in shard 0
+PUT: (client 1564761390942250874) (req 4) (put 3:d6ate) (shard 1)
+SERVER 1 (gid 100): appending 1:RrnbJ in shard 9
+SERVER 0 (gid 100): appending 1:RrnbJ in shard 9
+SERVER 0 (gid 100): appending 2:yYACi in shard 0
+SERVER 1 (gid 100): appending 2:yYACi in shard 0
+SERVER 2 (gid 100): appending 3:d6ate in shard 1
+PUT: (client 1564761390942250874) (req 5) (put 4:1T_w4) (shard 2)
+SERVER 2 (gid 100): appending 4:1T_w4 in shard 2
+PUT: (client 1564761390942250874) (req 6) (put 5:cFkek) (shard 3)
+SERVER 1 (gid 100): appending 3:d6ate in shard 1
+SERVER 0 (gid 100): appending 3:d6ate in shard 1
+SERVER 1 (gid 100): appending 4:1T_w4 in shard 2
+SERVER 0 (gid 100): appending 4:1T_w4 in shard 2
+SERVER 2 (gid 100): appending 5:cFkek in shard 3
+PUT: (client 1564761390942250874) (req 7) (put 6:3_W0e) (shard 4)
+SERVER 1 (gid 100): appending 5:cFkek in shard 3
+SERVER 0 (gid 100): appending 5:cFkek in shard 3
+SERVER 2 (gid 100): appending 6:3_W0e in shard 4
+PUT: (client 1564761390942250874) (req 8) (put 7:VYB87) (shard 5)
+SERVER 2 (gid 100): appending 7:VYB87 in shard 5
+SERVER 1 (gid 100): appending 6:3_W0e in shard 4
+PUT: (client 1564761390942250874) (req 9) (put 8:qw3t6) (shard 6)
+SERVER 0 (gid 100): appending 6:3_W0e in shard 4
+SERVER 1 (gid 100): appending 7:VYB87 in shard 5
+SERVER 0 (gid 100): appending 7:VYB87 in shard 5
+SERVER 2 (gid 100): appending 8:qw3t6 in shard 6
+PUT: (client 1564761390942250874) (req 10) (put 9:_gm87) (shard 7)
+SERVER 0 (gid 100): appending 8:qw3t6 in shard 6
+SERVER 1 (gid 100): appending 8:qw3t6 in shard 6
+SERVER 2 (gid 100): appending 9:_gm87 in shard 7
+GET: (client 1564761390942250874) (req 11) (get 0) (shard 8)
+SERVER 1 (gid 100): appending 9:_gm87 in shard 7
+GET: (client 1564761390942250874) (req 12) (get 1) (shard 9)
+SERVER 0 (gid 100): appending 9:_gm87 in shard 7
+GET: (client 1564761390942250874) (req 13) (get 2) (shard 0)
+GET: (client 1564761390942250874) (req 14) (get 3) (shard 1)
+GET: (client 1564761390942250874) (req 15) (get 4) (shard 2)
+GET: (client 1564761390942250874) (req 16) (get 5) (shard 3)
+GET: (client 1564761390942250874) (req 17) (get 6) (shard 4)
+GET: (client 1564761390942250874) (req 18) (get 7) (shard 5)
+GET: (client 1564761390942250874) (req 19) (get 8) (shard 6)
+GET: (client 1564761390942250874) (req 20) (get 9) (shard 7)
+JOIN 1
+GET: (client 1564761390942250874) (req 21) (get 0) (shard 8)
+SERVER 0 (gid 102): updating config {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]} to {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]}
+PUT: (client 1564761390942250874) (req 22) (put 0:W8ITu) (shard 8)
+SERVER 2 (gid 100): updating config {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]} to {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]}
+SERVER 0 (gid 101): updating config {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]} to {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]}
+SERVER 1 (gid 100): updating config {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]} to {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]}
+SERVER 0 (gid 100): updating config {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]} to {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]}
+SERVER 1 (gid 101): updating config {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]} to {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]}
+SERVER 2 (gid 101): updating config {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]} to {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]}
+SERVER 0 (gid 101): updating shard 7: {map[9:_gm87] 2 0}
+SERVER 0 (gid 101): updating shard 9: {map[1:RrnbJ] 2 0}
+SERVER 1 (gid 101): updating shard 7: {map[9:_gm87] 2 0}
+SERVER 2 (gid 101): updating shard 7: {map[9:_gm87] 2 0}
+SERVER 2 (gid 102): updating config {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]} to {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]}
+SERVER 1 (gid 102): updating config {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]} to {2 [100 100 100 100 100 101 101 101 101 101] map[100:[server-100-0 server-100-1 server-100-2] 101:[server-101-0 server-101-1 server-101-2]]}
+SERVER 2 (gid 101): updating shard 9: {map[1:RrnbJ] 2 0}
+SERVER 1 (gid 101): updating shard 9: {map[1:RrnbJ] 2 0}
+SERVER 0 (gid 101): updating shard 6: {map[8:qw3t6] 2 0}
+SERVER 0 (gid 101): updating shard 8: {map[0:5TRo4] 2 0}
+SERVER 0 (gid 101): updating shard 5: {map[7:VYB87] 2 0}
+SERVER 2 (gid 101): updating shard 6: {map[8:qw3t6] 2 0}
+SERVER 1 (gid 101): updating shard 6: {map[8:qw3t6] 2 0}
+SERVER 2 (gid 101): updating shard 8: {map[0:5TRo4] 2 0}
+SERVER 1 (gid 101): updating shard 8: {map[0:5TRo4] 2 0}
+SERVER 0 (gid 101): appending 0:W8ITu in shard 8
+GET: (client 1564761390942250874) (req 23) (get 1) (shard 9)
+SERVER 1 (gid 101): updating shard 5: {map[7:VYB87] 2 0}
+SERVER 2 (gid 101): updating shard 5: {map[7:VYB87] 2 0}
+SERVER 0 (gid 101): updating shard 5: {map[7:VYB87] 2 0}
+SERVER 2 (gid 101): appending 0:W8ITu in shard 8
+SERVER 1 (gid 101): appending 0:W8ITu in shard 8
+SERVER 0 (gid 101): updating shard 6: {map[8:qw3t6] 2 0}
+PUT: (client 1564761390942250874) (req 24) (put 1:SvkpC) (shard 9)
+SERVER 0 (gid 101): updating shard 8: {map[0:5TRo4] 2 0}
+SERVER 1 (gid 101): updating shard 5: {map[7:VYB87] 2 0}
+SERVER 2 (gid 101): updating shard 5: {map[7:VYB87] 2 0}
+SERVER 1 (gid 101): updating shard 6: {map[8:qw3t6] 2 0}
+SERVER 2 (gid 101): updating shard 6: {map[8:qw3t6] 2 0}
+SERVER 0 (gid 101): appending 1:SvkpC in shard 9
+GET: (client 1564761390942250874) (req 25) (get 2) (shard 0)
+SERVER 1 (gid 101): updating shard 8: {map[0:5TRo4] 2 0}
+SERVER 2 (gid 101): updating shard 8: {map[0:5TRo4] 2 0}
+PUT: (client 1564761390942250874) (req 26) (put 2:A_zEM) (shard 0)
+SERVER 2 (gid 100): appending 2:A_zEM in shard 0
+GET: (client 1564761390942250874) (req 27) (get 3) (shard 1)
+SERVER 0 (gid 100): appending 2:A_zEM in shard 0
+SERVER 1 (gid 101): appending 1:SvkpC in shard 9
+SERVER 2 (gid 101): appending 1:SvkpC in shard 9
+SERVER 1 (gid 100): appending 2:A_zEM in shard 0
+PUT: (client 1564761390942250874) (req 28) (put 3:LWCKg) (shard 1)
+SERVER 2 (gid 100): appending 3:LWCKg in shard 1
+GET: (client 1564761390942250874) (req 29) (get 4) (shard 2)
+SERVER 0 (gid 100): appending 3:LWCKg in shard 1
+SERVER 1 (gid 100): appending 3:LWCKg in shard 1
+PUT: (client 1564761390942250874) (req 30) (put 4:VJMdT) (shard 2)
+SERVER 2 (gid 100): appending 4:VJMdT in shard 2
+GET: (client 1564761390942250874) (req 31) (get 5) (shard 3)
+SERVER 1 (gid 100): appending 4:VJMdT in shard 2
+PUT: (client 1564761390942250874) (req 32) (put 5:MoD9W) (shard 3)
+SERVER 0 (gid 100): appending 4:VJMdT in shard 2
+SERVER 2 (gid 100): appending 5:MoD9W in shard 3
+GET: (client 1564761390942250874) (req 33) (get 6) (shard 4)
+SERVER 0 (gid 100): appending 5:MoD9W in shard 3
+SERVER 1 (gid 100): appending 5:MoD9W in shard 3
+PUT: (client 1564761390942250874) (req 34) (put 6:Ts69K) (shard 4)
+SERVER 2 (gid 100): appending 6:Ts69K in shard 4
+GET: (client 1564761390942250874) (req 35) (get 7) (shard 5)
+PUT: (client 1564761390942250874) (req 36) (put 7:934Sw) (shard 5)
+SERVER 0 (gid 100): appending 6:Ts69K in shard 4
+SERVER 0 (gid 101): appending 7:934Sw in shard 5
+GET: (client 1564761390942250874) (req 37) (get 8) (shard 6)
+PUT: (client 1564761390942250874) (req 38) (put 8:MiBn7) (shard 6)
+SERVER 2 (gid 101): appending 7:934Sw in shard 5
+SERVER 1 (gid 100): appending 6:Ts69K in shard 4
+SERVER 1 (gid 101): appending 7:934Sw in shard 5
+SERVER 0 (gid 101): appending 8:MiBn7 in shard 6
+GET: (client 1564761390942250874) (req 39) (get 9) (shard 7)
+SERVER 1 (gid 101): appending 8:MiBn7 in shard 6
+PUT: (client 1564761390942250874) (req 40) (put 9:gMsqU) (shard 7)
+SERVER 2 (gid 101): appending 8:MiBn7 in shard 6
+SERVER 0 (gid 101): appending 9:gMsqU in shard 7
+LEAVE 0
+GET: (client 1564761390942250874) (req 41) (get 0) (shard 8)
+SERVER 1 (gid 101): appending 9:gMsqU in shard 7
+SERVER 0 (gid 101): updating config {3 [101 101 101 101 101 101 101 101 101 101] map[101:[server-101-0 server-101-1 server-101-2]]} to {3 [101 101 101 101 101 101 101 101 101 101] map[101:[server-101-0 server-101-1 server-101-2]]}
+--- FAIL: TestJoinLeave (3.23s)
+    test_test.go:22: Get(0): expected:
+        5TRo4W8ITu
+        received:
+        5TRo4
+FAIL
+exit status 1
+FAIL	6.5840/shardkv	4.681s

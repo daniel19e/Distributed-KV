@@ -1,0 +1,246 @@
+Test: snapshots, join, and leave ...
+JOIN 0
+put ok true reply {ErrWrongGroup}
+put ok true reply {ErrWrongGroup}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK _6-Q1IHMm2TJcgob1Aeq}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK bZmdSGgd_qgBk1udvDRQ}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK -YGjIR6iWNq8lvbetqnL}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK qLuxnO0G2q4b_UZZPJ_O}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK xC7olTnPwaL1715iN6__}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK UMBwldwni7tv5LY7ltlG}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK dRJg5EUo963dgtmhAHhr}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK pgS3wkcgYnBCvNPXwM8r}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK hZ0W0-LzoAi7s6GTeHXS}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK wm98mvsjjdvRoaFMDqub}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK lti4okAwShdZG3vHTMYE}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK X3GRit1bGf_MQUv0jV7_}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK J8FBCOHUW6UX2m3Dyxk2}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK PISx8xiBlcVyeyJWoFED}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK 2k9a9yc6kwCeeBQTV_NA}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK 3n2wUcElYkYanuUJJYd3}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK 99yn3mJyGvcRqm-NNaMT}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK kVLVWW9xS2_FOsnE0Om6}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK rkAHX-_UhJu6oh3rk5Ev}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK 2OXT-GIohZezQv9r8aci}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK dNa802rzuf06NoJ2mo2m}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK opfjb-XrnWLmyN8_SDle}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK wnpLguQY8bDe7O7QWaxk}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK WnnHcJF93yk-Qg-n0Rxu}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK 7ZkY8adgDfFmy9bEfgYE}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK W3gAaAxQOfpgDHIZjyUM}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK X9_NVC5MKDvO5dLoOeRn}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK tV3HQaIuVf2KWmHOEOMD}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK Heq30bLKhkZ2PC4sYZZC}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK DwMz5TULQ7GIvq9--h0B}
+JOIN 1
+JOIN 2
+LEAVE 0
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK _6-Q1IHMm2TJcgob1Aeq}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {ErrWrongGroup bZmdSGgd_qgBk1udvDRQ}
+get ok true reply {ErrWrongGroup }
+get ok true reply {ErrWrongGroup }
+get ok true reply {OK bZmdSGgd_qgBk1udvDRQ}
+put ok true reply {OK}
+get ok true reply {ErrWrongGroup }
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK -YGjIR6iWNq8lvbetqnL}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK qLuxnO0G2q4b_UZZPJ_O}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK xC7olTnPwaL1715iN6__}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK UMBwldwni7tv5LY7ltlG}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK dRJg5EUo963dgtmhAHhr}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {OK pgS3wkcgYnBCvNPXwM8r}
+put ok true reply {OK}
+get ok true reply {OK hZ0W0-LzoAi7s6GTeHXS}
+put ok true reply {OK}
+get ok true reply {OK wm98mvsjjdvRoaFMDqub}
+put ok true reply {OK}
+get ok true reply {OK lti4okAwShdZG3vHTMYE}
+put ok true reply {OK}
+get ok true reply {OK X3GRit1bGf_MQUv0jV7_}
+put ok true reply {OK}
+get ok true reply {OK J8FBCOHUW6UX2m3Dyxk2}
+put ok true reply {OK}
+get ok true reply {OK PISx8xiBlcVyeyJWoFED}
+put ok true reply {OK}
+get ok true reply {OK 2k9a9yc6kwCeeBQTV_NA}
+put ok true reply {OK}
+get ok true reply {OK 3n2wUcElYkYanuUJJYd3}
+put ok true reply {OK}
+get ok true reply {OK 99yn3mJyGvcRqm-NNaMT}
+put ok true reply {OK}
+get ok true reply {OK kVLVWW9xS2_FOsnE0Om6}
+put ok true reply {OK}
+get ok true reply {OK rkAHX-_UhJu6oh3rk5Ev}
+put ok true reply {OK}
+get ok true reply {OK 2OXT-GIohZezQv9r8aci}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK dNa802rzuf06NoJ2mo2m}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK opfjb-XrnWLmyN8_SDle}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK wnpLguQY8bDe7O7QWaxk}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK WnnHcJF93yk-Qg-n0Rxu}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK 7ZkY8adgDfFmy9bEfgYE}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK W3gAaAxQOfpgDHIZjyUM}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK X9_NVC5MKDvO5dLoOeRn}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK tV3HQaIuVf2KWmHOEOMD}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK Heq30bLKhkZ2PC4sYZZC}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {OK DwMz5TULQ7GIvq9--h0B}
+put ok true reply {ErrWrongLeader}
+put ok true reply {OK}
+LEAVE 1
+JOIN 0
+get ok true reply {OK _6-Q1IHMm2TJcgob1AeqjDZwBcOa7f0AqiwfNSbu}
+put ok true reply {OK}
+get ok true reply {OK bZmdSGgd_qgBk1udvDRQpFQ4E3AdzytICXK7amNC}
+put ok true reply {OK}
+get ok true reply {ErrWrongLeader }
+get ok true reply {ErrWrongGroup }
+get ok true reply {ErrWrongGroup }
+get ok true reply {ErrWrongGroup }
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation code=0x2 addr=0x0 pc=0x10102c7e8]
+
+goroutine 27 [running]:
+6.5840/shardkv.(*ShardKV).updateShardDataL(...)
+	/Users/Daniel/Desktop/ClassesUSF/DistributedSystems/6.5840/src/shardkv/server.go:742
+6.5840/shardkv.(*ShardKV).commandApplier(0x1400014a160)
+	/Users/Daniel/Desktop/ClassesUSF/DistributedSystems/6.5840/src/shardkv/server.go:401 +0x798
+created by 6.5840/shardkv.StartServer in goroutine 6
+	/Users/Daniel/Desktop/ClassesUSF/DistributedSystems/6.5840/src/shardkv/server.go:538 +0x448
+exit status 2
+FAIL	6.5840/shardkv	6.574s

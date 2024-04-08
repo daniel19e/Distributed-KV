@@ -1,0 +1,13 @@
+Test: join then leave ...
+JOIN 0
+JOIN 1
+wrong group
+LEAVE 0
+--- FAIL: TestJoinLeave (2.35s)
+    test_test.go:22: Get(1) from shard 9: expected:
+        neAMIsQx86
+        received:
+        neAMI
+FAIL
+exit status 1
+FAIL	6.5840/shardkv	2.781s

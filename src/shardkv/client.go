@@ -11,7 +11,6 @@ package shardkv
 import (
 	"crypto/rand"
 	"math/big"
-	"sync"
 	"time"
 
 	"6.5840/labrpc"
@@ -43,9 +42,8 @@ type Clerk struct {
 	make_end func(string) *labrpc.ClientEnd
 
 	clientId int64
-	reqId    int64
-	leaderId int64
-	mu       sync.Mutex
+	reqId    int
+	leaderId int
 }
 
 // the tester calls MakeClerk.
@@ -74,13 +72,10 @@ func MakeClerk(ctrlers []*labrpc.ClientEnd, make_end func(string) *labrpc.Client
 func (ck *Clerk) Get(key string) string {
 	args := GetArgs{}
 	args.Key = key
-
-	ck.mu.Lock()
 	ck.reqId++
 	args.ClientId = ck.clientId
 	args.ReqId = ck.reqId
-	ck.mu.Unlock()
-	DPrintf("GET: (client %d) (req %d) (get %s) (shard %d)", ck.clientId, ck.reqId, key, key2shard(key))
+	//	fmt.Printf("GET: (client %d) (req %d) (get %s) (shard %d)\n", ck.clientId, ck.reqId, key, key2shard(key))
 	for {
 		shard := key2shard(key)
 		gid := ck.config.Shards[shard]
@@ -90,8 +85,9 @@ func (ck *Clerk) Get(key string) string {
 				srv := ck.make_end(servers[si])
 				var reply GetReply
 				ok := srv.Call("ShardKV.Get", &args, &reply)
-				//DPrintf("get ok %v reply %v\n", ok, reply)
+				//fmt.Printf("get ok %v reply %v\n", ok, reply)
 				if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
+					ck.leaderId = si
 					return reply.Value
 				}
 				if ok && (reply.Err == ErrWrongGroup) {
@@ -115,23 +111,22 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 	args.Key = key
 	args.Value = value
 	args.Op = op
-
-	ck.mu.Lock()
 	ck.reqId++
 	args.ClientId = ck.clientId
 	args.ReqId = ck.reqId
-	ck.mu.Unlock()
-	DPrintf("PUT: (client %d) (req %d) (put %s:%s) (shard %d)", ck.clientId, ck.reqId, key, value, key2shard(key))
+	//fmt.Printf("PUT: (client %d) (req %d) (put %s:%s) (shard %d)\n", ck.clientId, ck.reqId, key, value, key2shard(key))
 	for {
 		shard := key2shard(key)
 		gid := ck.config.Shards[shard]
 		if servers, ok := ck.config.Groups[gid]; ok {
 			for si := 0; si < len(servers); si++ {
-				srv := ck.make_end(servers[si])
+				i := (si + ck.leaderId) % len(servers)
+				srv := ck.make_end(servers[i])
 				var reply PutAppendReply
 				ok := srv.Call("ShardKV.PutAppend", &args, &reply)
-				//		DPrintf("put ok %v reply %v\n", ok, reply)
+				//fmt.Printf("put (%s:%s) after call - ok %v reply %v\n", key, value, ok, reply)
 				if ok && reply.Err == OK {
+					ck.leaderId = i
 					return
 				}
 				if ok && reply.Err == ErrWrongGroup {

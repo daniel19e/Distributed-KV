@@ -1,0 +1,14 @@
+Test: join then leave ...
+JOIN 0
+JOIN 1
+wrong group
+wrong group
+LEAVE 0
+--- FAIL: TestJoinLeave (2.42s)
+    test_test.go:22: Get(0) from shard 8: expected:
+        iWsquDaNec
+        received:
+        iWsqu
+FAIL
+exit status 1
+FAIL	6.5840/shardkv	2.787s

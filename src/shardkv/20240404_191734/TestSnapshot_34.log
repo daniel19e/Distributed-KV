@@ -1,0 +1,15 @@
+Test: snapshots, join, and leave ...
+JOIN 0
+JOIN 1
+JOIN 2
+LEAVE 0
+LEAVE 1
+JOIN 0
+--- FAIL: TestSnapshot (5.95s)
+    test_test.go:22: Get(2) from shard 0: expected:
+        Y9DgeG8mJqNPCt2BbXGmmxuDIO9r7tZXoh0OxUJm
+        received:
+        Y9DgeG8mJqNPCt2BbXGm
+FAIL
+exit status 1
+FAIL	6.5840/shardkv	6.177s

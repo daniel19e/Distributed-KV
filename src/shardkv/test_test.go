@@ -19,7 +19,7 @@ const linearizabilityCheckTimeout = 1 * time.Second
 func check(t *testing.T, ck *Clerk, key string, value string) {
 	v := ck.Get(key)
 	if v != value {
-		t.Fatalf("Get(%v): expected:\n%v\nreceived:\n%v", key, value, v)
+		t.Fatalf("Get(%v) from shard %d: expected:\n%v\nreceived:\n%v", key, key2shard(key), value, v)
 	}
 }
 
@@ -102,7 +102,6 @@ func TestJoinLeave(t *testing.T) {
 	defer cfg.cleanup()
 
 	ck := cfg.makeClient()
-	fmt.Print("JOIN 0\n")
 	cfg.join(0)
 
 	n := 10
@@ -116,7 +115,6 @@ func TestJoinLeave(t *testing.T) {
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
-	fmt.Print("JOIN 1\n")
 	cfg.join(1)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
@@ -124,7 +122,6 @@ func TestJoinLeave(t *testing.T) {
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
-	fmt.Print("LEAVE 0\n")
 	cfg.leave(0)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
@@ -135,12 +132,9 @@ func TestJoinLeave(t *testing.T) {
 
 	// allow time for shards to transfer.
 	time.Sleep(1 * time.Second)
-	fmt.Print("CHECK LOGS\n")
 	cfg.checklogs()
-	fmt.Print("SHUTDOWN GROUP 0\n")
 	cfg.ShutdownGroup(0)
 	for i := 0; i < n; i++ {
-		fmt.Printf("checking (%v of %v) - %v %v\n", i, n, ka[i], va[i])
 		check(t, ck, ka[i], va[i])
 	}
 
@@ -154,7 +148,6 @@ func TestSnapshot(t *testing.T) {
 	defer cfg.cleanup()
 
 	ck := cfg.makeClient()
-	fmt.Print("JOIN 0\n")
 	cfg.join(0)
 
 	n := 30
@@ -168,11 +161,8 @@ func TestSnapshot(t *testing.T) {
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
-	fmt.Print("JOIN 1\n")
 	cfg.join(1)
-	fmt.Print("JOIN 2\n")
 	cfg.join(2)
-	fmt.Print("LEAVE 0\n")
 	cfg.leave(0)
 
 	for i := 0; i < n; i++ {
@@ -181,9 +171,7 @@ func TestSnapshot(t *testing.T) {
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
-	fmt.Print("LEAVE 1\n")
 	cfg.leave(1)
-	fmt.Print("JOIN 0\n")
 	cfg.join(0)
 
 	for i := 0; i < n; i++ {
@@ -200,13 +188,11 @@ func TestSnapshot(t *testing.T) {
 	}
 
 	time.Sleep(1 * time.Second)
-	fmt.Print("CHECK LOGS\n")
 	cfg.checklogs()
-	fmt.Print("SHUTDOWN GROUPS\n")
 	cfg.ShutdownGroup(0)
 	cfg.ShutdownGroup(1)
 	cfg.ShutdownGroup(2)
-	fmt.Print("START GROUPS\n")
+
 	cfg.StartGroup(0)
 	cfg.StartGroup(1)
 	cfg.StartGroup(2)
@@ -225,7 +211,6 @@ func TestMissChange(t *testing.T) {
 	defer cfg.cleanup()
 
 	ck := cfg.makeClient()
-	fmt.Print("JOIN 0\n")
 	cfg.join(0)
 
 	n := 10

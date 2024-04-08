@@ -1,0 +1,12 @@
+Test: join then leave ...
+JOIN 0
+JOIN 1
+LEAVE 0
+--- FAIL: TestJoinLeave (2.31s)
+    test_test.go:22: Get(0) from shard 8: expected:
+        xjDRvbaNsM
+        received:
+        xjDRv
+FAIL
+exit status 1
+FAIL	6.5840/shardkv	2.686s

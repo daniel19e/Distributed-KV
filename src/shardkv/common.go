@@ -14,6 +14,7 @@ const (
 	ErrNoKey       = "ErrNoKey"
 	ErrWrongGroup  = "ErrWrongGroup"
 	ErrWrongLeader = "ErrWrongLeader"
+	NewErr         = "ErrNew"
 )
 
 type Err string
@@ -25,7 +26,7 @@ type PutAppendArgs struct {
 	Op    string // "Put" or "Append"
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
-	ReqId    int64
+	ReqId    int
 	ClientId int64
 }
 
@@ -35,7 +36,7 @@ type PutAppendReply struct {
 
 type GetArgs struct {
 	Key      string
-	ReqId    int64
+	ReqId    int
 	ClientId int64
 }
 
@@ -44,13 +45,15 @@ type GetReply struct {
 	Value string
 }
 
-type UpdateShardsArgs struct {
-	ClientId     int64
-	ReqId        int64
-	ShardId      int
-	Shard        Shard
-	DuplicateMap map[int64]int64
+type MoveShardsArgs struct {
+	Shard     int
+	ConfigNum int
 }
-type UpdateShardsReply struct {
+type MoveShardsReply struct {
 	Err Err
+
+	ConfigNum    int
+	Shard        int
+	Storage      map[string]string
+	DuplicateMap map[int64]int
 }

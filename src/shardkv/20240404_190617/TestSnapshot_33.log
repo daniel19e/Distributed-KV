@@ -1,0 +1,3 @@
+# 6.5840/shardkv [6.5840/shardkv.test]
+./config.go:246:18: undefined: StartServer
+FAIL	6.5840/shardkv [build failed]
