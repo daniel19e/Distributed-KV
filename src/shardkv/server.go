@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -23,24 +22,14 @@ func DPrintf(format string, a ...interface{}) (n int, err error) {
 	return
 }
 
-func (kv *ShardKV) printShardMapToString(shardMap map[int]*Shard) string {
-	sb := strings.Builder{}
-	fmt.Fprintf(&sb, "SERVER %d-%d: shardMap {", kv.gid, kv.me)
-	for i, shard := range shardMap {
-		fmt.Fprintf(&sb, "%d: %v ", i, shard)
-	}
-	fmt.Fprintf(&sb, "}")
-	return sb.String()
-}
-
 const (
-	Put         = "Put"
-	Append      = "Append"
-	Get         = "Get"
-	Config      = "Config"
-	MoveShards  = "MoveShards"
-	RemoveShard = "RemoveShard"
-	WrongGroup  = "WrongGroup"
+	Put          = "Put"
+	Append       = "Append"
+	Get          = "Get"
+	Config       = "Config"
+	RequestShard = "RequestShard"
+	RemoveShard  = "RemoveShard"
+	WrongGroup   = "WrongGroup"
 )
 
 type OpType string
@@ -62,17 +51,6 @@ type Op struct {
 	DuplicateMap map[int64]int
 }
 
-const (
-	Ready = iota
-	Waiting
-)
-
-type ShardState int
-type Shard struct {
-	Storage   map[string]string
-	ConfigNum int
-}
-
 type ShardKV struct {
 	mu           sync.Mutex
 	me           int
@@ -84,16 +62,20 @@ type ShardKV struct {
 	maxraftstate int // snapshot if log grows this big
 	sctrler      *shardctrler.Clerk
 
-	storage        map[string]string
-	waitMap        map[int]chan Op
+	shardedStorage map[int]map[string]string //shard -> storage
+	waitMap        map[int]chan Op           // cmdIndex -> chan of Op
 	duplicateMap   map[int64]int
 	lastAppliedMsg int
 	config         shardctrler.Config
-	// shard update related state
-	activeShards   map[int]bool
-	outgoingShards map[int]map[int]map[string]string //shard -> (config num -> storage)
-	incomingShards map[int]int                       //shard -> config num
-	garbage        map[int]map[int]bool              // config num -> (shard -> isGarbage)
+
+	activeShards map[int]bool // shard -> isActive
+	// these two maps contain information about shard transfer:
+	// incomingShards holds the shards that this server (kv.me) needs from other servers for a given config. shard -> config num
+	incomingShards map[int]int
+	// outgoingShards holds the data that this server (kv.me) needs to send to other servers for a given config. shard -> (config num -> storage)
+	outgoingShards map[int]map[int]map[string]string
+	//  map used for mark-and-sweep garbage collection. config num -> (shard -> isGarbage)
+	garbage map[int]map[int]bool
 }
 
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
@@ -174,19 +156,21 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.waitMap = make(map[int]chan Op)
 	kv.config = shardctrler.Config{}
 	kv.lastAppliedMsg = 0
-	kv.storage = make(map[string]string)
+	kv.shardedStorage = make(map[int]map[string]string)
+	for i := 0; i < shardctrler.NShards; i++ {
+		kv.shardedStorage[i] = make(map[string]string)
+	}
 
 	kv.outgoingShards = make(map[int]map[int]map[string]string)
 	kv.incomingShards = make(map[int]int)
 	kv.activeShards = make(map[int]bool)
 	kv.garbage = make(map[int]map[int]bool)
 
-	kv.readSnapshot(persister.ReadSnapshot())
-	go kv.snapshotApplier(persister, maxraftstate)
+	kv.snapshotApplier(persister, maxraftstate /*timeout =*/, 100)
 	kv.startBackgroundTask(kv.commandApplier /*timeout =*/, 10)
 	kv.startBackgroundTask(kv.configFetcher /*timeout =*/, 50)
-	kv.startBackgroundTask(kv.shardSender /*timeout =*/, 80)
-	kv.startBackgroundTask(kv.garbageCollector /*timeout =*/, 200)
+	kv.startBackgroundTask(kv.shardFetcher /*timeout =*/, 80)
+	kv.startBackgroundTask(kv.garbageCollector /*timeout =*/, 300)
 
 	return kv
 }
@@ -250,57 +234,54 @@ func (kv *ShardKV) applyConfig(op Op) {
 	}
 	prevConfig := kv.config
 	kv.config = op.Config
-	outgoingShards := kv.activeShards
+	prevActiveShards := kv.activeShards
 	kv.activeShards = make(map[int]bool)
 	for shard, gid := range op.Config.Shards {
 		if gid != kv.gid {
 			continue // ignore other groups
 		}
-		_, ok := outgoingShards[shard]
+		_, ok := prevActiveShards[shard]
 		if ok || prevConfig.Num == 0 {
 			kv.activeShards[shard] = true
-			delete(outgoingShards, shard)
+			delete(prevActiveShards, shard)
 		} else {
 			kv.incomingShards[shard] = prevConfig.Num
 		}
 	}
-	if len(outgoingShards) > 0 {
+	// shards that are left are inactive, so they need to be sent out
+	if len(prevActiveShards) > 0 {
 		kv.outgoingShards[prevConfig.Num] = make(map[int]map[string]string)
-		for shard := range outgoingShards {
+		for shard := range prevActiveShards {
 			outgoingStorage := make(map[string]string)
-			for k, v := range kv.storage {
-				if key2shard(k) == shard {
-					outgoingStorage[k] = v
-					delete(kv.storage, k)
-				}
+			for k, v := range kv.shardedStorage[shard] {
+				outgoingStorage[k] = v
+				delete(kv.shardedStorage[shard], k)
 			}
 			kv.outgoingShards[prevConfig.Num][shard] = outgoingStorage
 		}
 	}
 }
 
-func Max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-func (kv *ShardKV) applyUpdateShards(op Op) {
+func (kv *ShardKV) applyReceivedShard(op Op) {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
 	if op.ConfigNum != kv.config.Num-1 {
 		return
 	}
 	delete(kv.incomingShards, op.Shard)
-	if _, ok := kv.activeShards[op.Shard]; !ok {
+	_, ok := kv.activeShards[op.Shard]
+	if !ok {
 		kv.activeShards[op.Shard] = true
 		for k, v := range op.Storage {
-			kv.storage[k] = v
+			kv.shardedStorage[op.Shard][k] = v
 		}
-		for k, v := range op.DuplicateMap {
-			kv.duplicateMap[k] = Max(v, kv.duplicateMap[k]) // only update with the latest reqId
+		for clientId, reqId := range op.DuplicateMap {
+			if reqId > kv.duplicateMap[clientId] {
+				kv.duplicateMap[clientId] = reqId
+			}
 		}
-		if _, ok := kv.garbage[op.ConfigNum]; !ok {
+		_, ok := kv.garbage[op.ConfigNum]
+		if !ok {
 			kv.garbage[op.ConfigNum] = make(map[int]bool)
 		}
 		kv.garbage[op.ConfigNum][op.Shard] = true
@@ -315,23 +296,23 @@ func (kv *ShardKV) applyPutAppend(op Op) {
 	if !exists || reqId < op.ReqId {
 		DPrintf("SERVER %d-%d: appending %s:%s in shard %d\n", kv.gid, kv.me, op.Key, op.Value, shard)
 		if op.Type == Put {
-			kv.storage[op.Key] = op.Value
+			kv.shardedStorage[shard][op.Key] = op.Value
 		} else if op.Type == Append {
-			kv.storage[op.Key] += op.Value
+			kv.shardedStorage[shard][op.Key] += op.Value
 		}
 	}
 	kv.duplicateMap[op.ClientId] = op.ReqId
 }
-func (kv *ShardKV) applyGC(op Op) {
+func (kv *ShardKV) applyGarbageCollection(op Op) {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
-	if _, ok := kv.outgoingShards[op.ConfigNum]; ok {
+	_, ok := kv.outgoingShards[op.ConfigNum]
+	if ok {
 		delete(kv.outgoingShards[op.ConfigNum], op.Shard)
 		if len(kv.outgoingShards[op.ConfigNum]) == 0 {
 			delete(kv.outgoingShards, op.ConfigNum)
 		}
 	}
-
 }
 
 func (kv *ShardKV) commandApplier() {
@@ -339,19 +320,20 @@ func (kv *ShardKV) commandApplier() {
 	if msg.CommandValid {
 		idx := msg.CommandIndex
 		op := msg.Command.(Op)
+		_, ok := kv.activeShards[key2shard(op.Key)]
 		switch op.Type {
 		case Config:
 			kv.applyConfig(op)
 			DPrintf("SERVER %d-%d: updating config %v to %v\n", kv.gid, kv.me, kv.config, op.Config)
-		case MoveShards:
-			kv.applyUpdateShards(op)
+		case RequestShard:
+			kv.applyReceivedShard(op)
 			DPrintf("SERVER %d-%d: updating shards %v\n", kv.gid, kv.me, op.Shard)
 		case RemoveShard:
-			kv.applyGC(op)
+			kv.applyGarbageCollection(op)
 		case Put:
 			DPrintf("SERVER %d-%d: putting %s:%s in shard %d\n", kv.gid, kv.me, op.Key, op.Value, key2shard(op.Key))
 			kv.mu.Lock()
-			if _, ok := kv.activeShards[key2shard(op.Key)]; !ok {
+			if !ok {
 				op.Type = WrongGroup
 				kv.mu.Unlock()
 				return
@@ -361,7 +343,7 @@ func (kv *ShardKV) commandApplier() {
 		case Append:
 			DPrintf("SERVER %d-%d: appending %s:%s in shard %d\n", kv.gid, kv.me, op.Key, op.Value, key2shard(op.Key))
 			kv.mu.Lock()
-			if _, ok := kv.activeShards[key2shard(op.Key)]; !ok {
+			if !ok {
 				op.Type = WrongGroup
 				kv.mu.Unlock()
 				return
@@ -371,13 +353,13 @@ func (kv *ShardKV) commandApplier() {
 		case Get:
 			DPrintf("SERVER %d-%d: getting %s in shard %d\n", kv.gid, kv.me, op.Key, key2shard(op.Key))
 			kv.mu.Lock()
-			if _, ok := kv.activeShards[key2shard(op.Key)]; !ok {
+			if !ok {
 				op.Type = WrongGroup
 				kv.mu.Unlock()
 				return
 			}
 			// no need to update anything
-			op.Value = kv.storage[op.Key]
+			op.Value = kv.shardedStorage[key2shard(op.Key)][op.Key]
 			kv.duplicateMap[op.ClientId] = op.ReqId
 			kv.mu.Unlock()
 		default:
@@ -406,33 +388,36 @@ func (kv *ShardKV) commandApplier() {
 	}
 }
 
-func (kv *ShardKV) snapshotApplier(persister *raft.Persister, maxraftstate int) {
-	if maxraftstate == -1 {
-		// no need to take snapshot
-		return
-	}
-	for {
-		kv.mu.Lock()
-		size := persister.RaftStateSize()
-		if size > maxraftstate {
-			w := new(bytes.Buffer)
-			e := labgob.NewEncoder(w)
-			e.Encode(kv.storage)
-			e.Encode(kv.duplicateMap)
-			e.Encode(kv.lastAppliedMsg)
-			e.Encode(kv.config)
-			e.Encode(kv.outgoingShards)
-			e.Encode(kv.activeShards)
-			e.Encode(kv.incomingShards)
-			e.Encode(kv.garbage)
-			data := w.Bytes()
-			kv.rf.Snapshot(kv.lastAppliedMsg, data)
-			kv.mu.Unlock()
-		} else {
-			kv.mu.Unlock()
+func (kv *ShardKV) snapshotApplier(persister *raft.Persister, maxraftstate int, timeout time.Duration) {
+	kv.readSnapshot(persister.ReadSnapshot())
+	go func() {
+		if maxraftstate == -1 {
+			// no need to take snapshot
+			return
 		}
-		time.Sleep(time.Duration(100) * time.Millisecond)
-	}
+		for {
+			kv.mu.Lock()
+			size := persister.RaftStateSize()
+			if size > maxraftstate {
+				w := new(bytes.Buffer)
+				e := labgob.NewEncoder(w)
+				e.Encode(kv.shardedStorage)
+				e.Encode(kv.duplicateMap)
+				e.Encode(kv.lastAppliedMsg)
+				e.Encode(kv.config)
+				e.Encode(kv.outgoingShards)
+				e.Encode(kv.activeShards)
+				e.Encode(kv.incomingShards)
+				e.Encode(kv.garbage)
+				data := w.Bytes()
+				kv.rf.Snapshot(kv.lastAppliedMsg, data)
+				kv.mu.Unlock()
+			} else {
+				kv.mu.Unlock()
+			}
+			time.Sleep(time.Duration(timeout) * time.Millisecond)
+		}
+	}()
 }
 func (kv *ShardKV) readSnapshot(snapshot []byte) {
 	if snapshot == nil || len(snapshot) < 1 {
@@ -440,7 +425,7 @@ func (kv *ShardKV) readSnapshot(snapshot []byte) {
 	}
 	r := bytes.NewBuffer(snapshot)
 	d := labgob.NewDecoder(r)
-	d.Decode(&kv.storage)
+	d.Decode(&kv.shardedStorage)
 	d.Decode(&kv.duplicateMap)
 	d.Decode(&kv.lastAppliedMsg)
 	d.Decode(&kv.config)
@@ -466,11 +451,11 @@ func (kv *ShardKV) configFetcher() {
 			Config:    config,
 			ConfigNum: config.Num,
 		}
-		kv.rf.Start(op)
+		kv.sendToRaft(op)
 	}
 }
 
-func (kv *ShardKV) shardSender() {
+func (kv *ShardKV) shardFetcher() {
 	_, isLeader := kv.rf.GetState()
 	kv.mu.Lock()
 	if !isLeader || len(kv.incomingShards) == 0 {
@@ -482,23 +467,22 @@ func (kv *ShardKV) shardSender() {
 		wg.Add(1)
 		go func(shard int, config shardctrler.Config) {
 			defer wg.Done()
-			args := MoveShardsArgs{shard, config.Num}
+			args := MoveShardsArgs{Shard: shard, ConfigNum: config.Num}
 			gid := config.Shards[shard]
 			for _, server := range config.Groups[gid] {
-				srv := kv.make_end(server)
+				serverEndpoint := kv.make_end(server)
 				reply := MoveShardsReply{}
-				ok := srv.Call("ShardKV.MoveShardsRPC", &args, &reply)
+				ok := serverEndpoint.Call("ShardKV.RequestShardRPC", &args, &reply)
 				if ok && reply.Err == OK {
 					op := Op{
-						Type:         MoveShards,
+						Type:         RequestShard,
 						ConfigNum:    reply.ConfigNum,
 						Shard:        reply.Shard,
 						Storage:      reply.Storage,
 						DuplicateMap: reply.DuplicateMap,
 					}
-					kv.rf.Start(op)
+					kv.sendToRaft(op)
 				}
-
 			}
 		}(shard, kv.sctrler.Query(idx))
 	}
@@ -506,42 +490,7 @@ func (kv *ShardKV) shardSender() {
 	wg.Wait()
 }
 
-func (kv *ShardKV) garbageCollector() {
-	_, isLeader := kv.rf.GetState()
-	kv.mu.Lock()
-	if !isLeader || len(kv.garbage) == 0 {
-		kv.mu.Unlock()
-		return
-	}
-	wg := sync.WaitGroup{}
-	for configNum, shards := range kv.garbage {
-		for shard := range shards {
-			wg.Add(1)
-			go func(shard int, config shardctrler.Config, configNum int) {
-				defer wg.Done()
-				args := MoveShardsArgs{Shard: shard, ConfigNum: config.Num}
-				gid := config.Shards[shard]
-				for _, server := range config.Groups[gid] {
-					srv := kv.make_end(server)
-					reply := MoveShardsReply{}
-					ok := srv.Call("ShardKV.GarbageCollectionRPC", &args, &reply)
-					if ok && reply.Err == OK {
-						kv.mu.Lock()
-						defer kv.mu.Unlock()
-						delete(kv.garbage[configNum], shard)
-						if len(kv.garbage[configNum]) == 0 {
-							delete(kv.garbage, configNum)
-						}
-					}
-				}
-			}(shard, kv.sctrler.Query(configNum), configNum)
-		}
-	}
-	kv.mu.Unlock()
-	wg.Wait()
-}
-
-func (kv *ShardKV) MoveShardsRPC(args *MoveShardsArgs, reply *MoveShardsReply) {
+func (kv *ShardKV) RequestShardRPC(args *MoveShardsArgs, reply *MoveShardsReply) {
 	reply.Err = ErrWrongLeader
 	reply.Shard = args.Shard
 	reply.ConfigNum = args.ConfigNum
@@ -564,6 +513,41 @@ func (kv *ShardKV) MoveShardsRPC(args *MoveShardsArgs, reply *MoveShardsReply) {
 	for k, v := range kv.duplicateMap {
 		reply.DuplicateMap[k] = v
 	}
+}
+func (kv *ShardKV) garbageCollector() {
+	_, isLeader := kv.rf.GetState()
+	kv.mu.Lock()
+	if !isLeader || len(kv.garbage) == 0 {
+		kv.mu.Unlock()
+		return
+	}
+	wg := sync.WaitGroup{}
+	for idx, shards := range kv.garbage {
+		for shard := range shards {
+			wg.Add(1)
+			go func(shard int, config shardctrler.Config) {
+				defer wg.Done()
+				args := MoveShardsArgs{Shard: shard, ConfigNum: config.Num}
+				gid := config.Shards[shard]
+				for _, server := range config.Groups[gid] {
+					serverEndpoint := kv.make_end(server)
+					reply := MoveShardsReply{}
+					ok := serverEndpoint.Call("ShardKV.GarbageCollectionRPC", &args, &reply)
+					if ok && reply.Err == OK {
+						kv.mu.Lock()
+						defer kv.mu.Unlock()
+						// unmark the shard as garbage
+						delete(kv.garbage[config.Num], shard)
+						if len(kv.garbage[config.Num]) == 0 {
+							delete(kv.garbage, config.Num)
+						}
+					}
+				}
+			}(shard, kv.sctrler.Query(idx))
+		}
+	}
+	kv.mu.Unlock()
+	wg.Wait()
 }
 
 func (kv *ShardKV) GarbageCollectionRPC(args *MoveShardsArgs, reply *MoveShardsReply) {
